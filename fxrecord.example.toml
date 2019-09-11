@@ -1,0 +1,13 @@
+[fxrecorder]
+host = "127.0.0.1:8888"
+
+[fxrecorder.recording]
+ffmpeg_path = "C:\\ffmpeg\\ffmpeg.exe"
+video_size = { y = 1920, x = 1080 }
+output_size = { y = 1366, x = 768 }
+frame_rate = 60
+device = "AVerMedia GC551 Video Capture"
+buffer_size = "1000M"
+
+[fxrunner]
+host = "0.0.0.0:8888"
