@@ -4,17 +4,14 @@
 
 mod config;
 
-use std::error;
-use std::path::PathBuf;
-use std::process::exit;
+use std::error::Error;
+use std::path::{Path, PathBuf};
 
-use derive_more::Display;
-use slog::{error, info, Logger};
+use slog::{info, Logger};
 use structopt::StructOpt;
 
 use crate::config::Config;
-use fxrecord::config::{read_config, ConfigError};
-use fxrecord::logging::build_logger;
+use fxrecord::{run, CommonOptions};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "fxrunner", about = "Start FxRunner")]
@@ -24,37 +21,16 @@ struct Options {
     config_path: PathBuf,
 }
 
+impl CommonOptions for Options {
+    fn config_path(&self) -> &Path {
+        return &self.config_path;
+    }
+}
+
 fn main() {
-    let options = Options::from_args();
-    let log = build_logger();
-
-    if let Err(e) = fxrunner(log.clone(), options) {
-        error!(log, "unexpected error"; "error" => %e);
-        drop(log);
-        exit(1);
-    }
+    run::<Options, Config, _>(fxrunner, "fxrunner");
 }
 
-/// An error that occurred in FxRunner.
-#[derive(Debug, Display)]
-enum Error {
-    #[display(fmt = "{}", _0)]
-    Config(ConfigError),
-}
-
-impl error::Error for Error {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match &self {
-            Error::Config(ref e) => Some(e),
-        }
-    }
-}
-
-fn fxrunner(log: Logger, options: Options) -> Result<(), Error> {
-    info!(log, "read command-line options"; "options" => ?options);
-
-    let config: Config = read_config(&options.config_path, "fxrunner").map_err(Error::Config)?;
-    info!(log, "read config"; "config" => ?config);
-
+fn fxrunner(log: Logger, _options: Options, _config: Config) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
