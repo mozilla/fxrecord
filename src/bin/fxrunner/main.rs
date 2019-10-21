@@ -28,9 +28,9 @@ impl CommonOptions for Options {
 }
 
 fn main() {
-    run::<Options, Config, _>(fxrunner, "fxrunner");
+    run::<Options, Config, _, _>(fxrunner, "fxrunner");
 }
 
-fn fxrunner(_log: Logger, _options: Options, _config: Config) -> Result<(), Box<dyn Error>> {
+async fn fxrunner(_log: Logger, _options: Options, _config: Config) -> Result<(), Box<dyn Error>> {
     Ok(())
 }

@@ -7,9 +7,12 @@ use std::fmt::Debug;
 use std::path::Path;
 use std::process::exit;
 
+use futures::future::TryFutureExt;
 use serde::Deserialize;
 use slog::{error, info, Logger};
 use structopt::StructOpt;
+use tokio::prelude::*;
+use tokio::runtime::Runtime;
 
 use crate::config::read_config;
 use crate::logging::build_logger;
@@ -23,12 +26,14 @@ pub trait CommonOptions: StructOpt + Debug {
     fn config_path(&self) -> &Path;
 }
 
-/// A common main function that handles setting up logging.
-pub fn run<O, C, F>(f: F, section: &'static str)
+/// A common main function that handles setting up logging and running `F` on a
+/// tokio runtime.
+pub fn run<O, C, F, Fut>(f: F, section: &'static str)
 where
     O: CommonOptions,
     for<'de> C: Deserialize<'de>,
-    F: FnOnce(Logger, O, C) -> Result<(), Box<dyn Error>>,
+    Fut: Future<Output = Result<(), Box<dyn Error>>>,
+    F: FnOnce(Logger, O, C) -> Fut,
 {
     let options = O::from_args();
     let log = build_logger();
@@ -39,7 +44,11 @@ where
         .map_err(|e| Box::new(e) as Box<dyn Error>)
         .and_then({
             let log = log.clone();
-            move |config| f(log, options, config)
+            move |config| {
+                let rt = Runtime::new().expect("could not get tokio runtime");
+
+                rt.block_on(f(log, options, config).map_err(Into::into))
+            }
         });
 
     if let Err(e) = result {

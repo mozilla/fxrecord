@@ -28,9 +28,13 @@ impl CommonOptions for Options {
 }
 
 fn main() {
-    run::<Options, Config, _>(fxrecorder, "fxrecorder");
+    run::<Options, Config, _, _>(fxrecorder, "fxrecorder");
 }
 
-fn fxrecorder(_log: Logger, _options: Options, _config: Config) -> Result<(), Box<dyn Error>> {
+async fn fxrecorder(
+    _log: Logger,
+    _options: Options,
+    _config: Config,
+) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
