@@ -9,13 +9,13 @@ instruments Firefox on the reference hardware.
 
 `fxrecord` is released under the terms of the [Mozilla Public License 2.0](LICENSE).
 
-
 ## Code of Conduct
 
 This repository follows a [code of conduct](CODE_OF_CONDUCT.md).
 
-
 ## Requirements
+
+Both `fxrunner` and `fxrecorder` require Rust 1.39+ for async/await support.
 
 The only supported operating system for `fxrunner` is Windows 10. It is a
 statically linked executable with no other dependencies.
@@ -23,9 +23,9 @@ statically linked executable with no other dependencies.
 `fxrecorder` is also a statically linked executable, but it has two
 additional requirements:
 
-* a capture device compatible with [ffmpeg][ffmpeg] (I am using an
+- a capture device compatible with [ffmpeg][ffmpeg] (I am using an
   [AverMedia Gc551][gc551]); and
-* [ffmpeg][ffmpeg] version 4.2 or newer.
+- [ffmpeg][ffmpeg] version 4.2 or newer.
 
 `fxrecorder` presently requires a Windows 10 device as it assumes that
 DirectShow will be used for video capture. The capture card used while
@@ -35,14 +35,13 @@ be tested against any other operating system.
 [ffmpeg]: https://ffmpeg.org
 [gc551]: https://www.avermedia.com/us/product-detail/GC551
 
-
 ## Building
 
 `fxrecord` is built in Rust and uses [Cargo][rustup]. To build for production
 use, run
 
 ```sh
-cargo build --release
+cargo +beta build --release
 ```
 
 and the binaries will be located in the `target/release/` subdirectory. Copy
@@ -50,7 +49,6 @@ the `fxrunner` binary to the reference device and the `fxrecorder` to the
 recording device.
 
 [rustup]: https://rustup.rs/
-
 
 ## Configuration
 
