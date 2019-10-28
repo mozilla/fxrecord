@@ -7,7 +7,7 @@ mod config;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
-use slog::{info, Logger};
+use slog::Logger;
 use structopt::StructOpt;
 
 use crate::config::Config;
@@ -23,7 +23,7 @@ struct Options {
 
 impl CommonOptions for Options {
     fn config_path(&self) -> &Path {
-        return &self.config_path;
+        &self.config_path
     }
 }
 
@@ -31,6 +31,6 @@ fn main() {
     run::<Options, Config, _>(fxrunner, "fxrunner");
 }
 
-fn fxrunner(log: Logger, _options: Options, _config: Config) -> Result<(), Box<dyn Error>> {
+fn fxrunner(_log: Logger, _options: Options, _config: Config) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
