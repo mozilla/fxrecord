@@ -42,7 +42,7 @@ where
                 .and_then(|table| table.remove(section))
                 .ok_or_else(|| ConfigError::MissingSection {
                     path: PathBuf::from(path),
-                    section: section.into(),
+                    section,
                 })
         })
         .and_then(|val| {
