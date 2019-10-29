@@ -18,6 +18,7 @@ use crate::config::read_config;
 use crate::logging::build_logger;
 
 pub mod config;
+pub mod error;
 pub mod logging;
 
 /// A trait for exposing options common to both fxrunner and fxrecorder.
