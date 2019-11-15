@@ -5,9 +5,13 @@ authors = ["Barret Rennie <barret@mozilla.com>"]
 edition = "2018"
 license = "MPL-2.0"
 
+[lib]
+name = "fxrecorder"
+path = "src/lib/lib.rs"
+
 [[bin]]
 name = "fxrecorder"
-path = "src/main.rs"
+path = "src/bin/main.rs"
 
 [dependencies]
 derive_more = "0.15.0"
