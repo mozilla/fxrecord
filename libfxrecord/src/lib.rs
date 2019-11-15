@@ -54,7 +54,7 @@ where
         });
 
     if let Err(e) = result {
-        error!(log, "unexpected error"; "error" => %e);
+        error!(log, "unexpected error"; "error" => ?e);
         // We have to explicitly drop log here to flush output because
         // std::process::exit will not.
         drop(log);

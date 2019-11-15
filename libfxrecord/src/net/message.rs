@@ -173,11 +173,11 @@ macro_rules! impl_message_inner {
 /// This will take a macro of the form:
 ///
 /// ```
-/// # #[macro_use] extern crate fxrecord;
+/// # #[macro_use] extern crate libfxrecord;
 /// # use std::convert::{TryFrom, TryInto};
 /// # use derive_more::Display;
 /// # use serde::{Serialize, Deserialize};
-/// # use fxrecord::net::message::*;
+/// # use libfxrecord::net::message::*;
 /// impl_message! {
 ///     Msg,
 ///     MsgKind;
