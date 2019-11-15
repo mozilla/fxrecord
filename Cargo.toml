@@ -11,7 +11,7 @@ path = "src/lib/lib.rs"
 
 [dependencies]
 derive_more = "0.15.0"
-futures-preview = "0.3.0-alpha.19"
+futures-preview = { version = "0.3.0-alpha.19", features = ["async-await", "std"] }
 serde = { version = "1.0.100", features = ["derive"] }
 slog = "2.5.2"
 slog-async = "2.3.0"

@@ -3,11 +3,12 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 mod config;
+mod proto;
 
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
-use slog::Logger;
+use slog::{info, Logger};
 use structopt::StructOpt;
 
 use crate::config::Config;
@@ -31,6 +32,17 @@ fn main() {
     run::<Options, Config, _, _>(fxrunner, "fxrunner");
 }
 
-async fn fxrunner(_log: Logger, _options: Options, _config: Config) -> Result<(), Box<dyn Error>> {
+async fn fxrunner(log: Logger, _options: Options, config: Config) -> Result<(), Box<dyn Error>> {
+    use crate::proto::RunnerProto;
+    use tokio::net::TcpListener;
+
+    let mut listener = TcpListener::bind(&config.host).await?;
+    let (stream, addr) = listener.accept().await?;
+
+    info!(log, "Received connection"; "peer" => addr);
+    let mut proto = RunnerProto::new(log, stream);
+
+    proto.handshake_reply().await?;
+
     Ok(())
 }

@@ -20,6 +20,7 @@ use crate::logging::build_logger;
 pub mod config;
 pub mod error;
 pub mod logging;
+pub mod net;
 
 /// A trait for exposing options common to both fxrunner and fxrecorder.
 pub trait CommonOptions: StructOpt + Debug {

@@ -3,11 +3,12 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 mod config;
+mod proto;
 
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
-use slog::Logger;
+use slog::{info, Logger};
 use structopt::StructOpt;
 
 use crate::config::Config;
@@ -31,10 +32,16 @@ fn main() {
     run::<Options, Config, _, _>(fxrecorder, "fxrecorder");
 }
 
-async fn fxrecorder(
-    _log: Logger,
-    _options: Options,
-    _config: Config,
-) -> Result<(), Box<dyn Error>> {
+async fn fxrecorder(log: Logger, _options: Options, config: Config) -> Result<(), Box<dyn Error>> {
+    use crate::proto::RecorderProto;
+    use tokio::net::TcpStream;
+
+    let stream = TcpStream::connect(&config.host).await?;
+    info!(log, "Connected"; "peer" => config.host);
+
+    let mut proto = RecorderProto::new(log, stream);
+
+    proto.handshake().await?;
+
     Ok(())
 }
