@@ -7,6 +7,8 @@ use tokio::net::TcpStream;
 
 use libfxrecord::net::*;
 
+type Error = ProtoError<RecorderMessageKind>;
+
 /// The runner side of the protocol.
 pub struct RunnerProto {
     inner: Proto<RecorderMessage, RunnerMessage, RecorderMessageKind, RunnerMessageKind>,
@@ -21,12 +23,20 @@ impl RunnerProto {
         }
     }
 
+    /// Consume the RunnerProto and return the underlying `Proto`.
+    pub fn into_inner(
+        self,
+    ) -> Proto<RecorderMessage, RunnerMessage, RecorderMessageKind, RunnerMessageKind> {
+        self.inner
+    }
+
     /// Handshake with FxRecorder.
-    pub async fn handshake_reply(&mut self) -> Result<(), ProtoError<RecorderMessageKind>> {
+    pub async fn handshake_reply(&mut self) -> Result<bool, Error> {
         info!(self.log, "Handshaking ...");
-        self.inner.recv::<Handshake>().await?;
+        let Handshake { restart } = self.inner.recv().await?;
+
         self.inner.send(HandshakeReply).await?;
         info!(self.log, "Handshake complete");
-        Ok(())
+        Ok(restart)
     }
 }

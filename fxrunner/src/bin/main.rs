@@ -4,11 +4,15 @@
 
 use std::error::Error;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use libfxrecord::{run, CommonOptions};
 use libfxrunner::config::Config;
+use libfxrunner::proto::RunnerProto;
 use slog::{info, Logger};
 use structopt::StructOpt;
+use tokio::net::TcpListener;
+use tokio::time::delay_for;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "fxrunner", about = "Start FxRunner")]
@@ -29,16 +33,25 @@ fn main() {
 }
 
 async fn fxrunner(log: Logger, _options: Options, config: Config) -> Result<(), Box<dyn Error>> {
-    use libfxrunner::proto::RunnerProto;
-    use tokio::net::TcpListener;
+    loop {
+        let mut listener = TcpListener::bind(&config.host).await?;
 
-    let mut listener = TcpListener::bind(&config.host).await?;
-    let (stream, addr) = listener.accept().await?;
+        loop {
+            let (stream, addr) = listener.accept().await?;
+            info!(log, "Received connection"; "peer" => addr);
+            let mut proto = RunnerProto::new(log.clone(), stream);
 
-    info!(log, "Received connection"; "peer" => addr);
-    let mut proto = RunnerProto::new(log, stream);
+            let restart = proto.handshake_reply().await?;
 
-    proto.handshake_reply().await?;
+            if restart {
+                drop(proto);
+                drop(listener);
 
-    Ok(())
+                delay_for(Duration::from_secs(30)).await;
+                info!(log, "\"Restarted\"");
+
+                listener = TcpListener::bind(&config.host).await?;
+            }
+        }
+    }
 }

@@ -333,7 +333,10 @@ impl_message! {
     RecorderMessageKind;
 
     /// A handshake from FxRecorder to FxRunner.
-    Handshake;
+    Handshake {
+        /// Whether or not the runner should restart.
+        restart: bool,
+    };
 }
 
 impl_message! {
