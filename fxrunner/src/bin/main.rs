@@ -4,10 +4,15 @@
 
 use std::error::Error;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use libfxrecord::{run, CommonOptions};
 use slog::{info, Logger};
 use structopt::StructOpt;
+use tokio::net::TcpListener;
+use tokio::timer::delay_for;
+
+use fxrunner::proto::RunnerProto;
 
 use fxrunner::config::Config;
 
@@ -30,17 +35,25 @@ fn main() {
 }
 
 async fn fxrunner(log: Logger, _options: Options, config: Config) -> Result<(), Box<dyn Error>> {
-    use tokio::net::TcpListener;
+    loop {
+        let mut listener = TcpListener::bind(&config.host).await?;
 
-    use fxrunner::proto::RunnerProto;
+        loop {
+            let (stream, addr) = listener.accept().await?;
+            info!(log, "Received connection"; "peer" => addr);
+            let mut proto = RunnerProto::new(log.clone(), stream);
 
-    let mut listener = TcpListener::bind(&config.host).await?;
-    let (stream, addr) = listener.accept().await?;
+            let restart = proto.handshake_reply().await?;
 
-    info!(log, "Received connection"; "peer" => addr);
-    let mut proto = RunnerProto::new(log, stream);
+            if restart {
+                drop(proto);
+                drop(listener);
 
-    proto.handshake_reply().await?;
+                delay_for(Duration::from_secs(30)).await;
+                info!(log, "\"Restarted\"");
 
-    Ok(())
+                listener = TcpListener::bind(&config.host).await?;
+            }
+        }
+    }
 }

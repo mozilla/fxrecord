@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 use fxrecorder::proto::RecorderProto;
 use fxrunner::proto::RunnerProto;
 use slog::Logger;
@@ -14,15 +18,17 @@ async fn test_handshake() {
 
     tokio::spawn(async move {
         let (runner, _) = listener.accept().await.unwrap();
-        RunnerProto::new(test_logger(), runner)
+        let should_restart = RunnerProto::new(test_logger(), runner)
             .handshake_reply()
             .await
             .unwrap();
+
+        assert!(should_restart);
     });
 
     let recorder = TcpStream::connect(&addr).await.unwrap();
     RecorderProto::new(test_logger(), recorder)
-        .handshake()
+        .handshake(true)
         .await
         .unwrap();
 }

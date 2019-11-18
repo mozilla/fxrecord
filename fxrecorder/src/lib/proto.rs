@@ -20,10 +20,17 @@ impl RecorderProto {
         }
     }
 
-    /// Handshake with Fxrunner.
-    pub async fn handshake(&mut self) -> Result<(), ProtoError<RunnerMessageKind>> {
+    /// Consume the RecorderProto and return the underlying `Proto`.
+    pub fn into_inner(
+        self,
+    ) -> Proto<RunnerMessage, RecorderMessage, RunnerMessageKind, RecorderMessageKind> {
+        self.inner
+    }
+
+    /// Handshake with FxRunner.
+    pub async fn handshake(&mut self, restart: bool) -> Result<(), ProtoError<RunnerMessageKind>> {
         info!(self.log, "Handshaking ...");
-        self.inner.send(Handshake).await?;
+        self.inner.send(Handshake { restart }).await?;
         self.inner.recv::<HandshakeReply>().await?;
         info!(self.log, "Handshake complete");
         Ok(())

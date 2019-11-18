@@ -10,11 +10,16 @@ name = "integration-tests"
 path = "src/test.rs"
 
 [dev-dependencies]
+assert_matches = "1.3.0"
 slog = "2.5.2"
 tokio = "0.2.0-alpha.6"
+tokio-net = "0.2.0-alpha.6"
 
 [dev-dependencies.fxrecorder]
 path = "../fxrecorder"
 
 [dev-dependencies.fxrunner]
 path = "../fxrunner"
+
+[dev-dependencies.libfxrecord]
+path = "../libfxrecord"
