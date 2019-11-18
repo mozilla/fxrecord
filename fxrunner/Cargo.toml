@@ -25,6 +25,17 @@ tokio = "0.2.0-alpha.6"
 tokio-serde-json = "0.3.0"
 toml = "0.5.3"
 
+[dependencies.winapi]
+git =  "https://github.com/retep998/winapi-rs"
+branch = "0.3"
+features = [
+    "errhandlingapi",
+    "processthreadsapi",
+    "securitybaseapi",
+    "std",
+    "winbase",
+    "winreg",
+]
 
 [dependencies.libfxrecord]
 path = "../libfxrecord"
