@@ -87,6 +87,8 @@ use std::fmt::{Debug, Display};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 
+use crate::error::ErrorMessage;
+
 /// A message is a serializable and deserializable type.
 pub trait Message<'de>: Serialize + Deserialize<'de> + Unpin {
     /// Each message has a kind that uniquely identifies it.
@@ -347,5 +349,7 @@ impl_message! {
     RunnerMessageKind;
 
     /// A reply to a [`Handshake`](struct.Handshake.html) from FxRecorder.
-    HandshakeReply;
+    HandshakeReply {
+        result: Result<(), ErrorMessage<String>>,
+    };
 }

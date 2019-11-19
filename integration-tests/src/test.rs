@@ -4,8 +4,26 @@
 
 use fxrecorder::proto::RecorderProto;
 use fxrunner::proto::RunnerProto;
+use fxrunner::shutdown::Shutdown;
+use libfxrecord::error::ErrorMessage;
 use slog::Logger;
 use tokio::net::{TcpListener, TcpStream};
+
+#[derive(Default)]
+pub struct TestShutdown {
+    error: Option<String>,
+}
+
+impl Shutdown for TestShutdown {
+    type Error = ErrorMessage<String>;
+
+    fn initiate_restart(&self, _reason: &str) -> Result<(), Self::Error> {
+        match self.error {
+            Some(ref e) => Err(ErrorMessage(e.into())),
+            None => Ok(()),
+        }
+    }
+}
 
 fn test_logger() -> Logger {
     Logger::root(slog::Discard, slog::o! {})
@@ -18,7 +36,7 @@ async fn test_handshake() {
 
     tokio::spawn(async move {
         let (runner, _) = listener.accept().await.unwrap();
-        let should_restart = RunnerProto::new(test_logger(), runner)
+        let should_restart = RunnerProto::new(test_logger(), runner, TestShutdown { error: None })
             .handshake_reply()
             .await
             .unwrap();

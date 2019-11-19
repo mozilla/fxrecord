@@ -2,23 +2,31 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use std::error::Error;
+
+use derive_more::Display;
+use libfxrecord::error::ErrorExt;
 use libfxrecord::net::*;
-use slog::{info, Logger};
+use slog::{error, info, Logger};
 use tokio::net::TcpStream;
 
-type Error = ProtoError<RecorderMessageKind>;
+use crate::shutdown::Shutdown;
+
+type ProtoError = libfxrecord::net::ProtoError<RecorderMessageKind>;
 
 /// The runner side of the protocol.
-pub struct RunnerProto {
+pub struct RunnerProto<S> {
     inner: Proto<RecorderMessage, RunnerMessage, RecorderMessageKind, RunnerMessageKind>,
     log: Logger,
+    shutdown_handler: S,
 }
 
-impl RunnerProto {
-    pub fn new(log: Logger, stream: TcpStream) -> RunnerProto {
+impl<S: Shutdown> RunnerProto<S> {
+    pub fn new(log: Logger, stream: TcpStream, shutdown_handler: S) -> Self {
         Self {
             inner: Proto::new(stream),
             log,
+            shutdown_handler,
         }
     }
 
@@ -30,12 +38,54 @@ impl RunnerProto {
     }
 
     /// Handshake with FxRecorder.
-    pub async fn handshake_reply(&mut self) -> Result<bool, Error> {
+    pub async fn handshake_reply(&mut self) -> Result<bool, HandshakeError<S::Error>> {
         info!(self.log, "Handshaking ...");
         let Handshake { restart } = self.inner.recv().await?;
 
-        self.inner.send(HandshakeReply).await?;
+        if restart {
+            if let Err(e) = self
+                .shutdown_handler
+                .initiate_restart("fxrecord: recorder requested restart")
+            {
+                error!(self.log, "an error occurred while handshaking"; "error" => ?e);
+                self.inner
+                    .send(HandshakeReply {
+                        result: Err(e.into_error_message()),
+                    })
+                    .await?;
+
+                return Err(HandshakeError::Shutdown(e));
+            }
+            info!(self.log, "Restart requested; restarting ...");
+        }
+
+        self.inner.send(HandshakeReply { result: Ok(()) }).await?;
         info!(self.log, "Handshake complete");
+
         Ok(restart)
+    }
+}
+
+/// An error that occurs while handshaking.
+#[derive(Debug, Display)]
+pub enum HandshakeError<E: Error + 'static> {
+    /// An underlying protocol error.
+    Proto(ProtoError),
+    /// An error that occurs when failing to shutdown.
+    Shutdown(E),
+}
+
+impl<E: Error + 'static> Error for HandshakeError<E> {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            HandshakeError::Proto(ref source) => Some(source),
+            HandshakeError::Shutdown(ref source) => Some(source),
+        }
+    }
+}
+
+impl<E: Error> From<ProtoError> for HandshakeError<E> {
+    fn from(e: ProtoError) -> Self {
+        HandshakeError::Proto(e)
     }
 }
