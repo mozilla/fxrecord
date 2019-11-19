@@ -347,6 +347,7 @@ name = "integration-tests"
 version = "0.1.0"
 dependencies = [
  "assert_matches",
+ "futures",
  "fxrecorder",
  "fxrunner",
  "libfxrecord",

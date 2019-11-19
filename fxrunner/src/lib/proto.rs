@@ -12,7 +12,7 @@ use tokio::net::TcpStream;
 
 use crate::shutdown::ShutdownProvider;
 
-type ProtoError = libfxrecord::net::ProtoError<RecorderMessageKind>;
+pub type ProtoError = libfxrecord::net::ProtoError<RecorderMessageKind>;
 
 /// The runner side of the protocol.
 pub struct RunnerProto<S> {
@@ -71,7 +71,7 @@ where
 
 /// An error that occurs while handshaking.
 #[derive(Debug, Display)]
-pub enum HandshakeError<E: Error + 'static> {
+pub enum HandshakeError<E: Error + Sized + 'static> {
     /// An underlying protocol error.
     Proto(ProtoError),
     /// An error that occurs when failing to shutdown.
