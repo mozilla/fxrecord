@@ -13,7 +13,7 @@ use tokio::net::TcpStream;
 use tokio_serde_json::{ReadJson, WriteJson};
 
 use crate::error::ErrorMessage;
-pub use crate::net::message::{Message, MessageContent, RecorderMessage, RunnerMessage};
+use crate::net::message::{KindMismatch, Message, MessageContent};
 
 /// A protocol for receiving messages of type `R` and sending messages of type
 /// `S` over a `TcpStream`.
@@ -74,13 +74,13 @@ where
             .try_next()
             .await?
             .ok_or(ProtoError::EndOfStream)?;
-        let received = msg.kind();
+        let actual = msg.kind();
 
-        if M::kind() != received {
-            return Err(ProtoError::Unexpected {
+        if M::kind() != actual {
+            return Err(ProtoError::Unexpected(KindMismatch {
                 expected: M::kind(),
-                received,
-            });
+                actual,
+            }));
         }
 
         // We know that `M::kind() == msg.kind()` and this is true if and only
@@ -115,15 +115,10 @@ pub enum ProtoError<K: Debug + Display> {
     /// An unexpected message type arrived.
     #[display(
         fmt = "expected message of kind `{}' but received message of kind `{}'",
-        expected,
-        received
+        "_0.expected",
+        "_0.actual"
     )]
-    Unexpected {
-        /// The type of message that was expected.
-        expected: K,
-        /// The type of message that was received.
-        received: K,
-    },
+    Unexpected(KindMismatch<K>),
 }
 
 impl<K: Debug + Display> Error for ProtoError<K> {

@@ -402,6 +402,7 @@ name = "integration-tests"
 version = "0.1.0"
 dependencies = [
  "assert_matches 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures-preview 0.3.0-alpha.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "fxrecorder 0.1.0",
  "fxrunner 0.1.0",
  "libfxrecord 0.1.0",
