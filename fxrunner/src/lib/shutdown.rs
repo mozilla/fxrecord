@@ -15,11 +15,34 @@ pub trait ShutdownProvider {
 
 /// A [`ShutdownProvider`](trait.ShutdownProvider.html) that uses the Windows API.
 #[derive(Default)]
-pub struct WindowsShutdownProvider;
+pub struct WindowsShutdownProvider {
+    /// Whether or not to skip the actual restart.
+    #[cfg(debug_assertions)]
+    skip_restart: bool,
+}
+
+#[cfg(debug_assertions)]
+impl WindowsShutdownProvider {
+    pub fn skipping_restart(skip_restart: bool) -> Self {
+        let mut provider = WindowsShutdownProvider::default();
+        provider.skip_restart = skip_restart;
+        provider
+    }
+}
 
 impl ShutdownProvider for WindowsShutdownProvider {
     type Error = windows::ShutdownError;
 
+    #[cfg(debug_assertions)]
+    fn initiate_restart(&self, reason: &str) -> Result<(), Self::Error> {
+        if self.skip_restart {
+            Ok(())
+        } else {
+            windows::initiate_restart(reason)
+        }
+    }
+
+    #[cfg(not(debug_assertions))]
     fn initiate_restart(&self, reason: &str) -> Result<(), Self::Error> {
         windows::initiate_restart(reason)
     }

@@ -32,8 +32,17 @@ impl RecorderProto {
     pub async fn handshake(&mut self, restart: bool) -> Result<(), ProtoError<RunnerMessageKind>> {
         info!(self.log, "Handshaking ...");
         self.inner.send(Handshake { restart }).await?;
-        self.inner.recv::<HandshakeReply>().await?;
-        info!(self.log, "Handshake complete");
-        Ok(())
+        let HandshakeReply { result } = self.inner.recv().await?;
+
+        match result {
+            Ok(..) => {
+                info!(self.log, "Handshake complete");
+                Ok(())
+            }
+            Err(e) => {
+                info!(self.log, "Handshake failed: runner could not restart"; "error" => ?e);
+                Err(ProtoError::Foreign(e))
+            }
+        }
     }
 }
