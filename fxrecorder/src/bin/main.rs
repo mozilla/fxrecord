@@ -6,6 +6,7 @@ use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use libfxrecord::error::ErrorMessage;
 use libfxrecord::{run, CommonOptions};
 use libfxrecorder::config::Config;
 use libfxrecorder::proto::RecorderProto;
@@ -23,6 +24,12 @@ struct Options {
 
     /// The ID of a build task that will be used by the runner.
     task_id: String,
+
+    /// The path to a zipped Firefox profile for the runner to use.
+    ///
+    /// If not provided, the runner will create a new profile.
+    #[structopt(long = "profile")]
+    profile_path: Option<PathBuf>,
 }
 
 impl CommonOptions for Options {
@@ -36,6 +43,14 @@ fn main() {
 }
 
 async fn fxrecorder(log: Logger, options: Options, config: Config) -> Result<(), Box<dyn Error>> {
+    if let Some(ref profile_path) = options.profile_path {
+        let meta = tokio::fs::metadata(profile_path).await?;
+
+        if !meta.is_file() {
+            return Err(ErrorMessage("profile is not a file").into());
+        }
+    }
+
     {
         let stream = TcpStream::connect(&config.host).await?;
         info!(log, "Connected"; "peer" => config.host);
@@ -68,7 +83,10 @@ async fn fxrecorder(log: Logger, options: Options, config: Config) -> Result<(),
         let mut proto = RecorderProto::new(log, stream);
 
         proto.handshake(false).await?;
-        proto.download_build(&options.task_id).await?
+        proto.download_build(&options.task_id).await?;
+        proto
+            .send_profile(options.profile_path.as_ref().map(PathBuf::as_path))
+            .await?;
     }
 
     Ok(())

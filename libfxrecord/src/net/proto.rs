@@ -142,3 +142,9 @@ impl<K: Debug + Display> From<io::Error> for ProtoError<K> {
         ProtoError::Io(e)
     }
 }
+
+impl<K: Debug + Display> From<ErrorMessage<String>> for ProtoError<K> {
+    fn from(e: ErrorMessage<String>) -> Self {
+        ProtoError::Foreign(e)
+    }
+}
