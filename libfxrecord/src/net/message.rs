@@ -345,13 +345,31 @@ impl_message! {
         /// The build task ID.
         task_id: String,
     };
+
+    /// A request to send a profile of the given size.
+    ///
+    /// A size of zero indicates that there is no profile.
+    SendProfile {
+        profile_size: Option<u64>,
+    };
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum DownloadStatus {
     Downloading,
     Downloaded,
     Extracted,
+}
+
+impl DownloadStatus {
+    /// Return the next expected state, if any.
+    pub fn next(&self) -> Option<DownloadStatus> {
+        match self {
+            DownloadStatus::Downloading => Some(DownloadStatus::Downloaded),
+            DownloadStatus::Downloaded => Some(DownloadStatus::Extracted),
+            DownloadStatus::Extracted => None,
+        }
+    }
 }
 
 impl_message! {
@@ -370,5 +388,11 @@ impl_message! {
     /// FxRecorder.
     DownloadBuildReply {
         result: Result<DownloadStatus, ErrorMessage<String>>,
+    };
+
+    /// A reply to a [`SendProfile`](struct.SendProfile.html) message from
+    /// FxRecorder.
+    SendProfileReply {
+        result: Result<Option<DownloadStatus>, ErrorMessage<String>>,
     };
 }

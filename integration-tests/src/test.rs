@@ -8,7 +8,7 @@ use std::future::Future;
 use assert_matches::assert_matches;
 use chrono::prelude::*;
 use futures::join;
-use fxrecorder::proto::RecorderProto;
+use fxrecorder::proto::{RecorderProto, RecorderProtoError};
 use fxrunner::proto::{RunnerProto, RunnerProtoError};
 use fxrunner::shutdown::Shutdown;
 use fxrunner::taskcluster::{
@@ -104,8 +104,8 @@ async fn test_handshake() {
             async move {
                 // It is non-deterministic which error we will get.
                 match recorder.handshake(false).await.unwrap_err() {
-                    ProtoError::Io(..) => {}
-                    ProtoError::EndOfStream => {}
+                    RecorderProtoError::Proto(ProtoError::Io(..)) => {}
+                    RecorderProtoError::Proto(ProtoError::EndOfStream) => {}
                     e => panic!("unexpected error: {:?}", e),
                 }
             }
@@ -142,7 +142,7 @@ async fn test_handshake() {
             async move {
                 assert_matches!(
                     recorder.handshake(true).await.unwrap_err(),
-                    ProtoError::EndOfStream
+                    RecorderProtoError::Proto(ProtoError::EndOfStream)
                 );
             }
         },
@@ -197,11 +197,10 @@ async fn test_handshake() {
             }
         },
         |mut recorder| {
-            use fxrecorder::proto::ProtoError;
             async move {
                 assert_matches!(
                     recorder.handshake(true).await.unwrap_err(),
-                    ProtoError::Foreign(e) => {
+                    RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
                         assert_eq!(e.to_string(), "could not shutdown");
                     }
                 );
@@ -292,8 +291,11 @@ async fn test_download_build() {
                 async move {
                     assert_matches!(
                         recorder.download_build("foo").await.unwrap_err(),
-                        ProtoError::Foreign(ErrorMessage(e)) => {
-                            assert_eq!(e, TaskclusterError::NotFound.to_string());
+                        RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
+                            assert_eq!(
+                                e.to_string(),
+                                TaskclusterError::NotFound.to_string(),
+                            );
                         }
                     );
                 }
@@ -338,8 +340,11 @@ async fn test_download_build() {
                 async move {
                     assert_matches!(
                         recorder.download_build("foo").await.unwrap_err(),
-                        ProtoError::Foreign(ErrorMessage(e)) => {
-                            assert_eq!(e, TaskclusterError::Expired(expiry).to_string());
+                        RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
+                            assert_eq!(
+                                e.to_string(),
+                                TaskclusterError::Expired(expiry).to_string(),
+                            );
                         }
                     );
                 }
@@ -398,7 +403,7 @@ async fn test_download_build() {
                 async move {
                     assert_matches!(
                         recorder.download_build("foo").await.unwrap_err(),
-                        ProtoError::Foreign(e) => {
+                        RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
                             assert_eq!(
                                 e.to_string(),
                                 RunnerProtoError::<<TestShutdown as Shutdown>::Error>::MissingFirefox.to_string()
@@ -412,5 +417,310 @@ async fn test_download_build() {
 
         list_rsp.assert();
         artifact_rsp.assert();
+    }
+}
+
+#[tokio::test]
+async fn test_send_profile() {
+    let mut listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let test_dir = current_dir().unwrap().parent().unwrap().join("test");
+
+    let profile_zip_path = test_dir.join("profile.zip");
+    let nested_profile_zip_path = test_dir.join("profile_nested.zip");
+
+    {
+        let tempdir = TempDir::new().unwrap();
+        run_proto_test(
+            &mut listener,
+            TestShutdown::default(),
+            |mut runner| {
+                let temp_path = tempdir.path();
+                async move {
+                    assert!(runner
+                        .send_profile_reply(temp_path)
+                        .await
+                        .unwrap()
+                        .is_none());
+                }
+            },
+            |mut recorder| {
+                async move {
+                    recorder.send_profile(None).await.unwrap();
+                }
+            },
+        )
+        .await;
+
+        assert!(!tempdir.path().join("profile.zip").exists());
+        assert!(!tempdir.path().join("profile").exists());
+    }
+
+    {
+        let tempdir = TempDir::new().unwrap();
+        run_proto_test(
+            &mut listener,
+            TestShutdown::default(),
+            |mut runner| {
+                let temp_path = tempdir.path();
+                async move {
+                    let profile_path = runner.send_profile_reply(temp_path).await.unwrap().unwrap();
+
+                    assert_eq!(profile_path, temp_path.join("profile"));
+                }
+            },
+            |mut recorder| {
+                let zip_path = &profile_zip_path;
+                async move {
+                    recorder.send_profile(Some(zip_path)).await.unwrap();
+                }
+            },
+        )
+        .await;
+
+        assert!(tempdir.path().join("profile.zip").exists());
+
+        let profile_path = tempdir.path().join("profile");
+
+        assert!(profile_path.is_dir());
+        assert!(profile_path.join("places.sqlite").is_file());
+        assert!(profile_path.join("prefs.js").is_file());
+        assert!(profile_path.join("user.js").is_file());
+    }
+
+    {
+        let tempdir = TempDir::new().unwrap();
+        run_proto_test(
+            &mut listener,
+            TestShutdown::default(),
+            |mut runner| {
+                let temp_path = tempdir.path();
+                async move {
+                    let profile_path = runner.send_profile_reply(temp_path).await.unwrap().unwrap();
+
+                    assert_eq!(profile_path, temp_path.join("profile").join("profile"));
+
+                    assert!(profile_path.join("places.sqlite").is_file());
+                    assert!(profile_path.join("prefs.js").is_file());
+                    assert!(profile_path.join("user.js").is_file());
+                }
+            },
+            |mut recorder| {
+                let zip_path = &nested_profile_zip_path;
+                async move {
+                    recorder.send_profile(Some(zip_path)).await.unwrap();
+                }
+            },
+        )
+        .await;
+
+        assert!(tempdir.path().join("profile.zip").exists());
+
+        let profile_path = tempdir.path().join("profile").join("profile");
+
+        assert!(profile_path.is_dir());
+        assert!(profile_path.join("places.sqlite").is_file());
+        assert!(profile_path.join("prefs.js").is_file());
+        assert!(profile_path.join("user.js").is_file());
+    }
+
+    // Testing invalid runner reply when not sending a profile.
+    {
+        run_proto_test(
+            &mut listener,
+            TestShutdown::default(),
+            |runner| {
+                let mut runner = runner.into_inner();
+
+                async move {
+                    assert!(runner
+                        .recv::<SendProfile>()
+                        .await
+                        .unwrap()
+                        .profile_size
+                        .is_none());
+
+                    runner
+                        .send(SendProfileReply {
+                            result: Ok(Some(DownloadStatus::Downloading)),
+                        })
+                        .await
+                        .unwrap();
+                }
+            },
+            |mut recorder| {
+                async move {
+                    assert_matches!(
+                        recorder.send_profile(None).await.unwrap_err(),
+                        RecorderProtoError::SendProfileMismatch {
+                            expected: None,
+                            received: Some(DownloadStatus::Downloading),
+                        }
+                    );
+                }
+            },
+        )
+        .await;
+    }
+
+    // Testing invalid runner reply when `DownloadStatus::Downloading` was expected.
+    {
+        run_proto_test(
+            &mut listener,
+            TestShutdown::default(),
+            |runner| {
+                let mut runner = runner.into_inner();
+                async move {
+                    runner
+                        .recv::<SendProfile>()
+                        .await
+                        .unwrap()
+                        .profile_size
+                        .unwrap();
+
+                    runner
+                        .send(SendProfileReply {
+                            result: Ok(Some(DownloadStatus::Extracted)),
+                        })
+                        .await
+                        .unwrap();
+                }
+            },
+            |mut recorder| {
+                let zip_path = &profile_zip_path;
+                async move {
+                    assert_matches!(
+                        recorder.send_profile(Some(zip_path)).await.unwrap_err(),
+                        RecorderProtoError::SendProfileMismatch {
+                            expected: Some(DownloadStatus::Downloading),
+                            received: Some(DownloadStatus::Extracted),
+                        }
+                    );
+                }
+            },
+        )
+        .await;
+    }
+
+    // Testing invalid runner reply when `DownloadStatus::Downloaded` was expected.
+    {
+        run_proto_test(
+            &mut listener,
+            TestShutdown::default(),
+            |runner| {
+                let mut runner = runner.into_inner();
+
+                async move {
+                    let size = runner
+                        .recv::<SendProfile>()
+                        .await
+                        .unwrap()
+                        .profile_size
+                        .unwrap() as usize;
+
+                    runner
+                        .send(SendProfileReply {
+                            result: Ok(Some(DownloadStatus::Downloading)),
+                        })
+                        .await
+                        .unwrap();
+
+                    let mut stream = runner.into_inner();
+
+                    discard_exact(&mut stream, size).await;
+
+                    let mut runner = Proto::<
+                        RecorderMessage,
+                        RunnerMessage,
+                        RecorderMessageKind,
+                        RunnerMessageKind,
+                    >::new(stream);
+
+                    runner
+                        .send(SendProfileReply {
+                            result: Ok(Some(DownloadStatus::Extracted)),
+                        })
+                        .await
+                        .unwrap();
+                }
+            },
+            |mut recorder| {
+                let zip_path = &profile_zip_path;
+                async move {
+                    assert_matches!(
+                        recorder.send_profile(Some(zip_path)).await.unwrap_err(),
+                        RecorderProtoError::SendProfileMismatch {
+                            expected: Some(DownloadStatus::Downloaded),
+                            received: Some(DownloadStatus::Extracted),
+                        }
+                    );
+                }
+            },
+        )
+        .await;
+    }
+
+    // Testing invalid runner reply when `DownloadStatus::Downloaded` was expected.
+    {
+        run_proto_test(
+            &mut listener,
+            TestShutdown::default(),
+            |runner| {
+                let mut runner = runner.into_inner();
+
+                async move {
+                    let size = runner
+                        .recv::<SendProfile>()
+                        .await
+                        .unwrap()
+                        .profile_size
+                        .unwrap() as usize;
+
+                    runner
+                        .send(SendProfileReply {
+                            result: Ok(Some(DownloadStatus::Downloading)),
+                        })
+                        .await
+                        .unwrap();
+
+                    let mut stream = runner.into_inner();
+
+                    discard_exact(&mut stream, size).await;
+
+                    let mut runner = Proto::<
+                        RecorderMessage,
+                        RunnerMessage,
+                        RecorderMessageKind,
+                        RunnerMessageKind,
+                    >::new(stream);
+
+                    runner
+                        .send(SendProfileReply {
+                            result: Ok(Some(DownloadStatus::Downloaded)),
+                        })
+                        .await
+                        .unwrap();
+
+                    runner
+                        .send(SendProfileReply {
+                            result: Ok(Some(DownloadStatus::Downloaded)),
+                        })
+                        .await
+                        .unwrap();
+                }
+            },
+            |mut recorder| {
+                let zip_path = &profile_zip_path;
+                async move {
+                    assert_matches!(
+                        recorder.send_profile(Some(zip_path)).await.unwrap_err(),
+                        RecorderProtoError::SendProfileMismatch {
+                            expected: Some(DownloadStatus::Extracted),
+                            received: Some(DownloadStatus::Downloaded),
+                        }
+                    );
+                }
+            },
+        )
+        .await;
     }
 }
