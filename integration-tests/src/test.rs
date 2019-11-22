@@ -9,10 +9,14 @@ use futures::join;
 use libfxrecord::error::ErrorMessage;
 use libfxrecord::net::*;
 use libfxrecorder::proto::RecorderProto;
-use libfxrunner::proto::{HandshakeError, RunnerProto};
+use libfxrunner::proto::{RunnerProto, RunnerProtoError};
 use libfxrunner::shutdown::ShutdownProvider;
+use libfxrunner::taskcluster::{Taskcluster, TaskclusterError};
+use reqwest::StatusCode;
 use slog::Logger;
+use tempfile::TempDir;
 use tokio::net::{TcpListener, TcpStream};
+use url::Url;
 
 #[derive(Default)]
 pub struct TestShutdownProvider {
@@ -43,6 +47,16 @@ fn test_logger() -> Logger {
     Logger::root(slog::Discard, slog::o! {})
 }
 
+/// Generate a Taskcluster instance that points at mockito.
+fn test_tc() -> Taskcluster {
+    Taskcluster::with_queue_url(
+        Url::parse(&mockito::server_url())
+            .unwrap()
+            .join("/api/queue/v1/")
+            .unwrap(),
+    )
+}
+
 /// Run a test with both the recorder and runner protocols.
 async fn run_proto_test<T, U>(
     listener: &mut TcpListener,
@@ -57,7 +71,7 @@ async fn run_proto_test<T, U>(
 
     let runner = async {
         let (stream, _) = listener.accept().await.unwrap();
-        let proto = RunnerProto::new(test_logger(), stream, shutdown);
+        let proto = RunnerProto::new(test_logger(), stream, shutdown, test_tc());
 
         runner_fn(proto).await;
     };
@@ -74,7 +88,7 @@ async fn run_proto_test<T, U>(
 
 #[tokio::test]
 async fn test_handshake() {
-    let mut listener = TcpListener::bind("127.0.0.1:9999").await.unwrap();
+    let mut listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
 
     // Test runner dropping connection before receiving handshake.
     run_proto_test(
@@ -101,7 +115,7 @@ async fn test_handshake() {
         |mut runner| async move {
             assert_matches!(
                 runner.handshake_reply().await.unwrap_err(),
-                HandshakeError::Proto(ProtoError::EndOfStream)
+                RunnerProtoError::Proto(ProtoError::EndOfStream)
             );
         },
         |_| async move {},
@@ -156,7 +170,7 @@ async fn test_handshake() {
         TestShutdownProvider::with_error("could not shutdown"),
         |mut runner| async move {
             assert_matches!(runner.handshake_reply().await.unwrap_err(),
-                HandshakeError::Shutdown(e) => {
+                RunnerProtoError::Shutdown(e) => {
                     assert_eq!(e.to_string(), "could not shutdown");
                 }
             );
@@ -174,4 +188,77 @@ async fn test_handshake() {
         },
     )
     .await;
+}
+
+#[tokio::test]
+async fn test_download_build() {
+    let mut listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+
+    {
+        let download_dir = TempDir::new().unwrap();
+        let artifact_rsp = mockito::mock(
+            "GET",
+            "/api/queue/v1/task/foo/artifacts/public/build/target.zip",
+        )
+        .with_body("foo")
+        .create();
+
+        run_proto_test(
+            &mut listener,
+            TestShutdownProvider::default(),
+            |mut runner| async move {
+                runner
+                    .download_build_reply(download_dir.path())
+                    .await
+                    .unwrap();
+            },
+            |mut recorder| async move {
+                recorder.download_build("foo").await.unwrap();
+            },
+        )
+        .await;
+
+        artifact_rsp.assert();
+    }
+
+    {
+        let download_dir = TempDir::new().unwrap();
+        let artifact_rsp = mockito::mock(
+            "GET",
+            "/api/queue/v1/task/foo/artifacts/public/build/target.zip",
+        )
+        .with_status(404)
+        .with_body("not found")
+        .create();
+
+        run_proto_test(
+            &mut listener,
+            TestShutdownProvider::default(),
+            |mut runner| async move {
+                assert_matches!(
+                    runner
+                        .download_build_reply(download_dir.path())
+                        .await
+                        .unwrap_err(),
+                    RunnerProtoError::Taskcluster(TaskclusterError::StatusError(
+                        StatusCode::NOT_FOUND
+                    ))
+                );
+            },
+            |mut recorder| async move {
+                assert_matches!(
+                    recorder.download_build("foo").await.unwrap_err(),
+                    ProtoError::Foreign(ref e) => {
+                        assert_eq!(
+                            e.to_string(),
+                            "an error occurred while downloading the artifact: 404 Not Found"
+                        )
+                    }
+                );
+            },
+        )
+        .await;
+
+        artifact_rsp.assert();
+    }
 }

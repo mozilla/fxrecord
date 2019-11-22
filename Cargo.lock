@@ -580,8 +580,13 @@ dependencies = [
  "fxrecorder",
  "fxrunner",
  "libfxrecord",
+ "mockito",
+ "reqwest",
+ "serde_json",
  "slog",
+ "tempfile",
  "tokio",
+ "url",
 ]
 
 [[package]]

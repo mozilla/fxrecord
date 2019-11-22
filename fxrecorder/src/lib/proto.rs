@@ -2,10 +2,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use slog::{info, Logger};
-use tokio::net::TcpStream;
-
 use libfxrecord::net::*;
+use slog::{error, info, Logger};
+use tokio::net::TcpStream;
 
 pub type ProtoError = libfxrecord::net::ProtoError<RunnerMessageKind>;
 
@@ -44,6 +43,35 @@ impl RecorderProto {
             Err(e) => {
                 info!(self.log, "Handshake failed: runner could not restart"; "error" => ?e);
                 Err(ProtoError::Foreign(e))
+            }
+        }
+    }
+
+    pub async fn download_build(&mut self, task_id: &str) -> Result<(), ProtoError> {
+        info!(self.log, "Requesting download of build from task"; "task_id" => task_id);
+        self.inner
+            .send(DownloadBuild {
+                task_id: task_id.into(),
+            })
+            .await?;
+
+        loop {
+            let DownloadBuildReply { result } = self.inner.recv().await?;
+
+            match result {
+                Ok(true) => {
+                    info!(self.log, "Build download completed");
+                    return Ok(());
+                }
+
+                Ok(false) => {
+                    info!(self.log, "Build download started");
+                }
+
+                Err(e) => {
+                    error!(self.log, "Build download failed"; "task_id" => task_id, "error" => ?e);
+                    return Err(ProtoError::Foreign(e));
+                }
             }
         }
     }

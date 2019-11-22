@@ -10,8 +10,10 @@ use libfxrecord::{run, CommonOptions};
 use libfxrunner::config::Config;
 use libfxrunner::proto::RunnerProto;
 use libfxrunner::shutdown::WindowsShutdownProvider;
+use libfxrunner::taskcluster::Taskcluster;
 use slog::{info, Logger};
 use structopt::StructOpt;
+use tempfile::TempDir;
 use tokio::net::TcpListener;
 use tokio::time::delay_for;
 
@@ -68,11 +70,21 @@ async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), B
             let (stream, addr) = listener.accept().await?;
             info!(log, "Received connection"; "peer" => addr);
 
-            let mut proto = RunnerProto::new(log.clone(), stream, shutdown_provider(&options));
+            let mut proto = RunnerProto::new(
+                log.clone(),
+                stream,
+                shutdown_provider(&options),
+                Taskcluster::default(),
+            );
 
             if proto.handshake_reply().await? {
                 break;
             }
+
+            // We download everything into a temporary directory that will be
+            // cleaned up after the connection closes.
+            let download_dir = TempDir::new()?;
+            let _download = proto.download_build_reply(download_dir.path()).await?;
 
             info!(log, "Client disconnected");
         }

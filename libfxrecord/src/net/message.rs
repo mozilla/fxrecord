@@ -339,6 +339,12 @@ impl_message! {
         /// Whether or not the runner should restart.
         restart: bool,
     };
+
+    /// A request to download a specific build of Firefox.
+    DownloadBuild {
+        /// The build task ID.
+        task_id: String,
+    };
 }
 
 impl_message! {
@@ -351,5 +357,11 @@ impl_message! {
     /// A reply to a [`Handshake`](struct.Handshake.html) from FxRecorder.
     HandshakeReply {
         result: Result<(), ErrorMessage<String>>,
+    };
+
+    /// A reply to a [`DownloadBuild`](struct.DownloadBuild.html) message from
+    /// FxRecorder.
+    DownloadBuildReply {
+        result: Result<bool, ErrorMessage<String>>,
     };
 }

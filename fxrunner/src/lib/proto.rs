@@ -3,6 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use std::error::Error;
+use std::path::{Path, PathBuf};
 
 use derive_more::Display;
 use libfxrecord::error::ErrorExt;
@@ -11,25 +12,26 @@ use slog::{error, info, Logger};
 use tokio::net::TcpStream;
 
 use crate::shutdown::ShutdownProvider;
-
-pub type ProtoError = libfxrecord::net::ProtoError<RecorderMessageKind>;
+use crate::taskcluster::{Taskcluster, TaskclusterError};
 
 /// The runner side of the protocol.
 pub struct RunnerProto<S> {
     inner: Proto<RecorderMessage, RunnerMessage, RecorderMessageKind, RunnerMessageKind>,
     log: Logger,
     shutdown_handler: S,
+    tc: Taskcluster,
 }
 
 impl<S> RunnerProto<S>
 where
     S: ShutdownProvider,
 {
-    pub fn new(log: Logger, stream: TcpStream, shutdown_handler: S) -> Self {
+    pub fn new(log: Logger, stream: TcpStream, shutdown_handler: S, tc: Taskcluster) -> Self {
         Self {
             inner: Proto::new(stream),
             log,
             shutdown_handler,
+            tc,
         }
     }
 
@@ -41,7 +43,7 @@ where
     }
 
     /// Handshake with FxRecorder.
-    pub async fn handshake_reply(&mut self) -> Result<bool, HandshakeError<S::Error>> {
+    pub async fn handshake_reply(&mut self) -> Result<bool, RunnerProtoError<S::Error>> {
         info!(self.log, "Handshaking ...");
         let Handshake { restart } = self.inner.recv().await?;
 
@@ -57,7 +59,7 @@ where
                     })
                     .await?;
 
-                return Err(HandshakeError::Shutdown(e));
+                return Err(RunnerProtoError::Shutdown(e));
             }
             info!(self.log, "Restart requested; restarting ...");
         }
@@ -67,28 +69,79 @@ where
 
         Ok(restart)
     }
-}
 
-/// An error that occurs while handshaking.
-#[derive(Debug, Display)]
-pub enum HandshakeError<E: Error + Sized + 'static> {
-    /// An underlying protocol error.
-    Proto(ProtoError),
-    /// An error that occurs when failing to shutdown.
-    Shutdown(E),
-}
+    pub async fn download_build_reply(
+        &mut self,
+        download_dir: &Path,
+    ) -> Result<PathBuf, RunnerProtoError<S::Error>> {
+        let DownloadBuild { task_id } = self.inner.recv().await?;
 
-impl<E: Error + 'static> Error for HandshakeError<E> {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            HandshakeError::Proto(ref source) => Some(source),
-            HandshakeError::Shutdown(ref source) => Some(source),
+        info!(self.log, "Received build download request"; "task_id" => &task_id);
+
+        self.inner
+            .send(DownloadBuildReply { result: Ok(false) })
+            .await?;
+
+        match self
+            .tc
+            .download_build_artifact(&task_id, download_dir)
+            .await
+        {
+            Ok(download) => {
+                self.inner
+                    .send(DownloadBuildReply { result: Ok(true) })
+                    .await?;
+
+                Ok(download)
+            }
+
+            Err(e) => {
+                error!(self.log, "could not download build"; "error" => %e);
+                self.inner
+                    .send(DownloadBuildReply {
+                        result: Err(e.into_error_message()),
+                    })
+                    .await?;
+                Err(e.into())
+            }
         }
     }
 }
 
-impl<E: Error> From<ProtoError> for HandshakeError<E> {
-    fn from(e: ProtoError) -> Self {
-        HandshakeError::Proto(e)
+#[derive(Debug, Display)]
+pub enum RunnerProtoError<S> {
+    Proto(ProtoError<RecorderMessageKind>),
+    Shutdown(S),
+    Taskcluster(TaskclusterError),
+}
+
+impl<S> Error for RunnerProtoError<S>
+where
+    S: Error + 'static,
+{
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            RunnerProtoError::Proto(ref e) => Some(e),
+            RunnerProtoError::Shutdown(ref e) => Some(e),
+            RunnerProtoError::Taskcluster(ref e) => Some(e),
+        }
+    }
+}
+
+impl<S> From<ProtoError<RecorderMessageKind>> for RunnerProtoError<S>
+where
+    S: Error + 'static,
+{
+    fn from(e: ProtoError<RecorderMessageKind>) -> Self {
+        RunnerProtoError::Proto(e)
+    }
+}
+
+impl<S> From<TaskclusterError> for RunnerProtoError<S>
+where
+    S: Error + 'static,
+{
+    fn from(e: TaskclusterError) -> Self {
+        RunnerProtoError::Taskcluster(e)
     }
 }
