@@ -134,6 +134,8 @@ impl Taskcluster {
 
 #[cfg(test)]
 mod test {
+    use std::env::current_dir;
+
     use assert_matches::assert_matches;
     use reqwest::StatusCode;
     use tempfile::TempDir;
@@ -149,29 +151,26 @@ mod test {
 
     #[tokio::test]
     async fn test_firefox_ci() {
+        let zip_path = current_dir()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("test")
+            .join("test.zip");
+
         let artifact_rsp = mockito::mock(
             "GET",
             &*format!("/api/queue/v1/task/foo/artifacts/{}", BUILD_ARTIFACT_NAME),
         )
-        .with_body("foo")
+        .with_body_from_file(zip_path)
         .create();
 
         let download_dir = TempDir::new().unwrap();
 
-        let download = Taskcluster::with_queue_url(test_queue_url())
+        Taskcluster::with_queue_url(test_queue_url())
             .download_build_artifact("foo", download_dir.path())
             .await
             .unwrap();
-
-        let mut buf = String::new();
-        File::open(&download)
-            .await
-            .unwrap()
-            .read_to_string(&mut buf)
-            .await
-            .unwrap();
-
-        assert_eq!(buf, "foo");
 
         artifact_rsp.assert();
     }

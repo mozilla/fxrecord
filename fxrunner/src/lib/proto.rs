@@ -10,9 +10,11 @@ use libfxrecord::error::ErrorExt;
 use libfxrecord::net::*;
 use slog::{error, info, Logger};
 use tokio::net::TcpStream;
+use tokio::task::spawn_blocking;
 
 use crate::shutdown::ShutdownProvider;
 use crate::taskcluster::{Taskcluster, TaskclusterError};
+use crate::zip::{unzip, ZipError};
 
 /// The runner side of the protocol.
 pub struct RunnerProto<S> {
@@ -79,7 +81,9 @@ where
         info!(self.log, "Received build download request"; "task_id" => &task_id);
 
         self.inner
-            .send(DownloadBuildReply { result: Ok(false) })
+            .send(DownloadBuildReply {
+                result: Ok(DownloadStatus::Downloading),
+            })
             .await?;
 
         match self
@@ -87,12 +91,50 @@ where
             .download_build_artifact(&task_id, download_dir)
             .await
         {
-            Ok(download) => {
+            Ok(download_path) => {
                 self.inner
-                    .send(DownloadBuildReply { result: Ok(true) })
+                    .send(DownloadBuildReply {
+                        result: Ok(DownloadStatus::Downloaded),
+                    })
                     .await?;
 
-                Ok(download)
+                let unzip_result = spawn_blocking({
+                    let download_dir = PathBuf::from(download_dir);
+                    move || unzip(&download_path, &download_dir)
+                })
+                .await
+                .expect("unzip task was cancelled or panicked");
+
+                if let Err(e) = unzip_result {
+                    self.inner
+                        .send(DownloadBuildReply {
+                            result: Err(e.into_error_message()),
+                        })
+                        .await?;
+
+                    Err(e.into())
+                } else {
+                    let firefox_path = download_dir.join("firefox").join("firefox.exe");
+
+                    if !firefox_path.exists() {
+                        let err = RunnerProtoError::MissingFirefox;
+                        self.inner
+                            .send(DownloadBuildReply {
+                                result: Err(err.into_error_message()),
+                            })
+                            .await?;
+
+                        Err(err)
+                    } else {
+                        self.inner
+                            .send(DownloadBuildReply {
+                                result: Ok(DownloadStatus::Extracted),
+                            })
+                            .await?;
+
+                        Ok(firefox_path)
+                    }
+                }
             }
 
             Err(e) => {
@@ -111,8 +153,15 @@ where
 #[derive(Debug, Display)]
 pub enum RunnerProtoError<S> {
     Proto(ProtoError<RecorderMessageKind>),
+
     Shutdown(S),
+
     Taskcluster(TaskclusterError),
+
+    #[display(fmt = "No firefox.exe in build artifact")]
+    MissingFirefox,
+
+    Zip(ZipError),
 }
 
 impl<S> Error for RunnerProtoError<S>
@@ -124,6 +173,8 @@ where
             RunnerProtoError::Proto(ref e) => Some(e),
             RunnerProtoError::Shutdown(ref e) => Some(e),
             RunnerProtoError::Taskcluster(ref e) => Some(e),
+            RunnerProtoError::Zip(ref e) => Some(e),
+            RunnerProtoError::MissingFirefox => None,
         }
     }
 }
@@ -143,5 +194,13 @@ where
 {
     fn from(e: TaskclusterError) -> Self {
         RunnerProtoError::Taskcluster(e)
+    }
+}
+impl<S> From<ZipError> for RunnerProtoError<S>
+where
+    S: Error + 'static,
+{
+    fn from(e: ZipError) -> Self {
+        RunnerProtoError::Zip(e)
     }
 }

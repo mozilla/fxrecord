@@ -347,6 +347,13 @@ impl_message! {
     };
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub enum DownloadStatus {
+    Downloading,
+    Downloaded,
+    Extracted,
+}
+
 impl_message! {
     /// A message from FxRunner to FxRecorder.
     RunnerMessage,
@@ -362,6 +369,6 @@ impl_message! {
     /// A reply to a [`DownloadBuild`](struct.DownloadBuild.html) message from
     /// FxRecorder.
     DownloadBuildReply {
-        result: Result<bool, ErrorMessage<String>>,
+        result: Result<DownloadStatus, ErrorMessage<String>>,
     };
 }
