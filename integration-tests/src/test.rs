@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use std::env::current_dir;
 use std::future::Future;
 
 use assert_matches::assert_matches;
@@ -216,6 +217,13 @@ async fn test_download_build() {
 
     {
         let download_dir = TempDir::new().unwrap();
+        let zip_path = current_dir()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("test")
+            .join("firefox.zip");
+
         let list_rsp = mockito::mock("GET", "/api/queue/v1/task/foo/artifacts")
             .with_body(
                 serde_json::to_string(&ArtifactsResponse {
@@ -234,7 +242,7 @@ async fn test_download_build() {
             "GET",
             "/api/queue/v1/task/foo/artifacts/public/build/target.zip",
         )
-        .with_body("foo")
+        .with_body_from_file(&zip_path)
         .create();
 
         run_proto_test(
@@ -340,5 +348,69 @@ async fn test_download_build() {
         .await;
 
         list_rsp.assert();
+    }
+
+    {
+        let download_dir = TempDir::new().unwrap();
+        let zip_path = current_dir()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("test")
+            .join("test.zip");
+
+        let list_rsp = mockito::mock("GET", "/api/queue/v1/task/foo/artifacts")
+            .with_body(
+                serde_json::to_string(&ArtifactsResponse {
+                    artifacts: vec![Artifact {
+                        name: BUILD_ARTIFACT_NAME.into(),
+                        expires: Utc::now()
+                            .checked_add_signed(chrono::Duration::seconds(3600))
+                            .unwrap(),
+                    }],
+                })
+                .unwrap(),
+            )
+            .create();
+
+        let artifact_rsp = mockito::mock(
+            "GET",
+            "/api/queue/v1/task/foo/artifacts/public/build/target.zip",
+        )
+        .with_body_from_file(&zip_path)
+        .create();
+
+        run_proto_test(
+            &mut listener,
+            TestShutdown::default(),
+            |mut runner| {
+                async move {
+                    assert_matches!(
+                        runner
+                            .download_build_reply(download_dir.path())
+                            .await
+                            .unwrap_err(),
+                        RunnerProtoError::MissingFirefox
+                    );
+                }
+            },
+            |mut recorder| {
+                async move {
+                    assert_matches!(
+                        recorder.download_build("foo").await.unwrap_err(),
+                        ProtoError::Foreign(e) => {
+                            assert_eq!(
+                                e.to_string(),
+                                RunnerProtoError::<<TestShutdown as Shutdown>::Error>::MissingFirefox.to_string()
+                            );
+                        }
+                    );
+                }
+            },
+        )
+        .await;
+
+        list_rsp.assert();
+        artifact_rsp.assert();
     }
 }

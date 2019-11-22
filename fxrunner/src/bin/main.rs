@@ -112,7 +112,8 @@ async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), B
             // We download everything into a temporary directory that will be
             // cleaned up after the connection closes.
             let download_dir = TempDir::new()?;
-            let _download = proto.download_build_reply(download_dir.path()).await?;
+            let firefox_bin = proto.download_build_reply(download_dir.path()).await?;
+            assert!(firefox_bin.is_file());
         }
     }
 }

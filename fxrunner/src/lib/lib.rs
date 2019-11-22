@@ -6,3 +6,4 @@ pub mod config;
 pub mod proto;
 pub mod shutdown;
 pub mod taskcluster;
+pub mod zip;

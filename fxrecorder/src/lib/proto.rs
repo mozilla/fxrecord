@@ -59,13 +59,17 @@ impl RecorderProto {
             let DownloadBuildReply { result } = self.inner.recv().await?;
 
             match result {
-                Ok(true) => {
-                    info!(self.log, "Build download completed");
-                    return Ok(());
+                Ok(DownloadStatus::Downloading) => {
+                    info!(self.log, "Downloading build ...");
                 }
 
-                Ok(false) => {
-                    info!(self.log, "Build download started");
+                Ok(DownloadStatus::Downloaded) => {
+                    info!(self.log, "Build download complete; extracting build ...");
+                }
+
+                Ok(DownloadStatus::Extracted) => {
+                    info!(self.log, "Build extracted");
+                    return Ok(());
                 }
 
                 Err(e) => {
