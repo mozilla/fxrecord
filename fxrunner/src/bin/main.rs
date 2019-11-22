@@ -9,12 +9,14 @@ use std::time::Duration;
 use libfxrecord::{run, CommonOptions};
 use slog::{info, Logger};
 use structopt::StructOpt;
+use tempfile::TempDir;
 use tokio::net::TcpListener;
 use tokio::timer::delay_for;
 
 use fxrunner::config::Config;
 use fxrunner::proto::RunnerProto;
 use fxrunner::shutdown::*;
+use fxrunner::taskcluster::Taskcluster;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "fxrunner", about = "Start FxRunner")]
@@ -74,10 +76,12 @@ async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), B
                 DebugShutdown {
                     skip_restart: options.skip_restart(),
                 },
+                Taskcluster::default(),
             );
 
             #[cfg(not(debug_assertions))]
-            let mut proto = RunnerProto::new(log.clone(), stream, WindowsShutdown);
+            let mut proto =
+                RunnerProto::new(log.clone(), stream, WindowsShutdown, Taskcluster::default());
 
             let restart = proto.handshake_reply().await?;
 
@@ -104,6 +108,11 @@ async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), B
                     return Ok(());
                 }
             }
+
+            // We download everything into a temporary directory that will be
+            // cleaned up after the connection closes.
+            let download_dir = TempDir::new()?;
+            let _download = proto.download_build_reply(download_dir.path()).await?;
         }
     }
 }

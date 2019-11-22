@@ -21,6 +21,9 @@ struct Options {
     /// The configuration file to use.
     #[structopt(long = "config", default_value = "fxrecord.toml")]
     config_path: PathBuf,
+
+    /// The ID of a build task that will be used by the runner.
+    task_id: String,
 }
 
 impl CommonOptions for Options {
@@ -33,7 +36,7 @@ fn main() {
     run::<Options, Config, _, _>(fxrecorder, "fxrecorder");
 }
 
-async fn fxrecorder(log: Logger, _options: Options, config: Config) -> Result<(), Box<dyn Error>> {
+async fn fxrecorder(log: Logger, options: Options, config: Config) -> Result<(), Box<dyn Error>> {
     {
         let stream = TcpStream::connect(&config.host).await?;
         info!(log, "Connected"; "peer" => config.host);
@@ -66,6 +69,7 @@ async fn fxrecorder(log: Logger, _options: Options, config: Config) -> Result<()
         let mut proto = RecorderProto::new(log, stream);
 
         proto.handshake(false).await?;
+        proto.download_build(&options.task_id).await?
     }
 
     Ok(())
