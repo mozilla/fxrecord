@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use libfxrecord::error::ErrorMessage;
+use libfxrecord::prefs::{parse_pref, PrefValue};
 use libfxrecord::{run, CommonOptions};
 use slog::{error, info, Logger};
 use structopt::StructOpt;
@@ -31,6 +32,13 @@ struct Options {
     /// If not provided, the runner will create a new profile.
     #[structopt(long = "profile")]
     profile_path: Option<PathBuf>,
+
+    /// Preferences that the runner should use.
+    ///
+    /// Preferences should be of the form `pref.name:value` where value is a
+    /// string, boolean, or number.
+    #[structopt(long = "pref", number_of_values(1), parse(try_from_str = parse_pref))]
+    prefs: Vec<(String, PrefValue)>,
 }
 
 impl CommonOptions for Options {
@@ -44,7 +52,14 @@ fn main() {
 }
 
 async fn fxrecorder(log: Logger, options: Options, config: Config) -> Result<(), Box<dyn Error>> {
-    if let Some(ref profile_path) = options.profile_path {
+    let Options {
+        task_id,
+        profile_path,
+        prefs,
+        ..
+    } = options;
+
+    if let Some(ref profile_path) = profile_path {
         let meta = tokio::fs::metadata(profile_path).await?;
 
         if !meta.is_file() {
@@ -84,10 +99,11 @@ async fn fxrecorder(log: Logger, options: Options, config: Config) -> Result<(),
         let mut proto = RecorderProto::new(log, stream);
 
         proto.handshake(false).await?;
-        proto.download_build(&options.task_id).await?;
+        proto.download_build(&task_id).await?;
         proto
-            .send_profile(options.profile_path.as_ref().map(PathBuf::as_path))
+            .send_profile(profile_path.as_ref().map(PathBuf::as_path))
             .await?;
+        proto.send_prefs(prefs).await?;
     }
 
     Ok(())

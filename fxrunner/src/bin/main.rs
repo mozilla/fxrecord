@@ -126,6 +126,10 @@ async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), B
                 }
             };
             assert!(profile_path.is_dir());
+
+            proto
+                .send_prefs_reply(&profile_path.join("user.js"))
+                .await?;
         }
     }
 }

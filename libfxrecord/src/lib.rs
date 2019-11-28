@@ -21,6 +21,7 @@ pub mod config;
 pub mod error;
 pub mod logging;
 pub mod net;
+pub mod prefs;
 
 /// A trait for exposing options common to both fxrunner and fxrecorder.
 pub trait CommonOptions: StructOpt + Debug {

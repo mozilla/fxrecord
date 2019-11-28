@@ -9,8 +9,9 @@ use std::path::{Path, PathBuf};
 use derive_more::Display;
 use libfxrecord::error::ErrorExt;
 use libfxrecord::net::*;
+use libfxrecord::prefs::write_prefs;
 use slog::{error, info, Logger};
-use tokio::fs::File;
+use tokio::fs::{File, OpenOptions};
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio_executor::blocking;
@@ -267,6 +268,50 @@ where
         stream.take(profile_size).copy(&mut f).await?;
 
         Ok(zip_path)
+    }
+
+    pub async fn send_prefs_reply(
+        &mut self,
+        prefs_path: &Path,
+    ) -> Result<(), RunnerProtoError<S::Error>> {
+        let SendPrefs { prefs } = self.recv().await?;
+
+        if prefs.is_empty() {
+            return self
+                .send(SendPrefsReply { result: Ok(()) })
+                .await
+                .map_err(Into::into);
+        }
+
+        let mut f = match OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(&prefs_path)
+            .await
+        {
+            Ok(f) => f,
+            Err(e) => {
+                self.send(SendPrefsReply {
+                    result: Err(e.into_error_message()),
+                })
+                .await?;
+                return Err(e.into());
+            }
+        };
+
+        match write_prefs(&mut f, prefs.into_iter()).await {
+            Ok(()) => {
+                self.send(SendPrefsReply { result: Ok(()) }).await?;
+                Ok(())
+            }
+            Err(e) => {
+                self.send(SendPrefsReply {
+                    result: Err(e.into_error_message()),
+                })
+                .await?;
+                Err(e.into())
+            }
+        }
     }
 }
 

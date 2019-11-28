@@ -9,6 +9,7 @@ use std::path::Path;
 use derive_more::Display;
 use libfxrecord::error::ErrorMessage;
 use libfxrecord::net::*;
+use libfxrecord::prefs::PrefValue;
 use slog::{error, info, Logger};
 use tokio::fs::File;
 use tokio::net::TcpStream;
@@ -217,6 +218,16 @@ impl RecorderProto {
         let mut f = File::open(profile_path).await?;
 
         f.copy(stream).await.map_err(Into::into).map(drop)
+    }
+
+    /// Send the preferences that the runner should use.
+    pub async fn send_prefs(&mut self, prefs: Vec<(String, PrefValue)>) -> Result<(), ProtoError> {
+        self.send(SendPrefs { prefs }).await?;
+        let SendPrefsReply { result } = self.recv().await?;
+
+        result?;
+
+        Ok(())
     }
 }
 

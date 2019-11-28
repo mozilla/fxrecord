@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use std::convert::TryInto;
 use std::env::current_dir;
 use std::future::Future;
 
@@ -14,11 +15,15 @@ use fxrunner::shutdown::Shutdown;
 use fxrunner::taskcluster::{
     Artifact, ArtifactsResponse, Taskcluster, TaskclusterError, BUILD_ARTIFACT_NAME,
 };
+use indoc::indoc;
 use libfxrecord::error::ErrorMessage;
 use libfxrecord::net::*;
+use serde_json::Value;
 use slog::Logger;
 use tempfile::TempDir;
+use tokio::fs::{create_dir_all, File};
 use tokio::net::{TcpListener, TcpStream};
+use tokio::prelude::*;
 use url::Url;
 
 #[derive(Default)]
@@ -722,5 +727,155 @@ async fn test_send_profile() {
             },
         )
         .await;
+    }
+}
+
+#[tokio::test]
+async fn test_send_prefs() {
+    let mut listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+
+    // Test not sending any prefs.
+    {
+        let tempdir = TempDir::new().unwrap();
+        let profile_path = tempdir.path().join("profile");
+
+        create_dir_all(&profile_path).await.unwrap();
+        let prefs_path = profile_path.join("user.js");
+
+        run_proto_test(
+            &mut listener,
+            TestShutdown::default(),
+            |mut runner| {
+                let prefs_path = prefs_path.clone();
+                async move {
+                    runner.send_prefs_reply(&prefs_path).await.unwrap();
+                }
+            },
+            |mut recorder| {
+                async move {
+                    recorder.send_prefs(vec![]).await.unwrap();
+                }
+            },
+        )
+        .await;
+
+        assert!(!prefs_path.exists());
+    }
+
+    // Test sending a list of prefs.
+    {
+        let tempdir = TempDir::new().unwrap();
+        let profile_path = tempdir.path().join("profile");
+        create_dir_all(&profile_path).await.unwrap();
+        let prefs_path = profile_path.join("user.js");
+
+        run_proto_test(
+            &mut listener,
+            TestShutdown::default(),
+            |mut runner| {
+                let prefs_path = prefs_path.clone();
+                async move {
+                    runner.send_prefs_reply(&prefs_path).await.unwrap();
+                }
+            },
+            |mut recorder| {
+                async move {
+                    recorder
+                        .send_prefs(vec![
+                            (
+                                "foo".into(),
+                                Value::String("bar".into()).try_into().unwrap(),
+                            ),
+                            ("bar".into(), Value::Bool(true).try_into().unwrap()),
+                            ("baz".into(), Value::Number(1i64.into()).try_into().unwrap()),
+                        ])
+                        .await
+                        .unwrap();
+                }
+            },
+        )
+        .await;
+
+        assert!(prefs_path.exists());
+
+        let contents = {
+            let mut buf = String::new();
+            let mut f = File::open(&prefs_path).await.unwrap();
+
+            f.read_to_string(&mut buf).await.unwrap();
+            buf
+        };
+
+        assert_eq!(
+            contents,
+            indoc!(
+                r#"pref("foo", "bar");
+                pref("bar", true);
+                pref("baz", 1);
+                "#
+            )
+        );
+    }
+
+    // Test appending to an already existing user.js.
+    {
+        let tempdir = TempDir::new().unwrap();
+        let profile_path = tempdir.path().join("profile");
+
+        create_dir_all(&profile_path).await.unwrap();
+        let prefs_path = profile_path.join("user.js");
+
+        {
+            let mut f = File::create(&prefs_path).await.unwrap();
+            f.write_all(
+                indoc!(
+                    r#"// user.js
+                    pref("foo", "bar");
+                    // end user.js
+                    "#
+                )
+                .as_bytes(),
+            )
+            .await
+            .unwrap();
+        }
+
+        run_proto_test(
+            &mut listener,
+            TestShutdown::default(),
+            |mut runner| {
+                let prefs_path = prefs_path.clone();
+                async move {
+                    runner.send_prefs_reply(&prefs_path).await.unwrap();
+                }
+            },
+            |mut recorder| {
+                async move {
+                    recorder
+                        .send_prefs(vec![(
+                            "baz".into(),
+                            Value::String("qux".into()).try_into().unwrap(),
+                        )])
+                        .await
+                        .unwrap()
+                }
+            },
+        )
+        .await;
+
+        let mut buf = String::new();
+        let mut f = File::open(&prefs_path).await.unwrap();
+        f.read_to_string(&mut buf).await.unwrap();
+
+        assert_eq!(
+            buf,
+            indoc!(
+                r#"// user.js
+                pref("foo", "bar");
+                // end user.js
+                pref("baz", "qux");
+                "#
+            )
+        );
     }
 }
