@@ -88,6 +88,7 @@ use derive_more::Display;
 use serde::{Deserialize, Serialize};
 
 use crate::error::ErrorMessage;
+use crate::prefs::PrefValue;
 
 /// A message is a serializable and deserializable type.
 pub trait Message<'de>: Serialize + Deserialize<'de> + Unpin {
@@ -352,6 +353,11 @@ impl_message! {
     SendProfile {
         profile_size: Option<u64>,
     };
+
+    /// A request for the runner to use the provided prefs.
+    SendPrefs {
+        prefs: Vec<(String, PrefValue)>,
+    };
 }
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -394,5 +400,11 @@ impl_message! {
     /// FxRecorder.
     SendProfileReply {
         result: Result<Option<DownloadStatus>, ErrorMessage<String>>,
+    };
+
+    /// A reply to a [`SendPrefs`](struct.SendPrefs.html) message from
+    /// FxRecorder.
+    SendPrefsReply {
+        result: Result<(), ErrorMessage<String>>,
     };
 }
