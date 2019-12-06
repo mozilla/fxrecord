@@ -1,6 +1,6 @@
 # fxrecord
 
-`fxrecord` is a tool for capturing and analyzing recordings of Firefox
+`fxrecord` is a tool for capturing and analyzing video recordings of Firefox
 desktop startup. It consists of two parts: `fxrecorder`, which records the
 output of the reference hardware and does analysis, and `fxrunner`, which
 instruments Firefox on the reference hardware.
