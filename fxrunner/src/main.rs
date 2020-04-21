@@ -7,11 +7,11 @@ mod config;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
+use libfxrecord::{run, CommonOptions};
 use slog::Logger;
 use structopt::StructOpt;
 
 use crate::config::Config;
-use fxrecord::{run, CommonOptions};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "fxrunner", about = "Start FxRunner")]
