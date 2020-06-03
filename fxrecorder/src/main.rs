@@ -8,10 +8,8 @@ use std::error::Error;
 use std::path::{Path, PathBuf};
 
 use libfxrecord::{run, CommonOptions};
-use slog::{info, Logger};
+use slog::Logger;
 use structopt::StructOpt;
-use tarpc::context;
-use tokio_serde::formats::Bincode;
 
 use crate::config::Config;
 
@@ -33,17 +31,10 @@ fn main() {
     run::<Options, Config, _, _>(fxrecorder, "fxrecorder");
 }
 
-async fn fxrecorder(log: Logger, _options: Options, config: Config) -> Result<(), Box<dyn Error>> {
-
-    let transport = tarpc::serde_transport::tcp::connect(config.host, Bincode::default()).await?;
-    info!(log, "Connected to fxrunner");
-
-    let mut client = libfxrecord::service::FxRunnerServiceClient::new(
-        tarpc::client::Config::default(),
-        transport,
-    )
-    .spawn()?;
-
-    client.request_restart(context::current()).await?;
+async fn fxrecorder(
+    _log: Logger,
+    _options: Options,
+    _config: Config,
+) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
