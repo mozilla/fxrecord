@@ -3,6 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use std::error::Error;
+use std::future::Future;
 use std::fmt::Debug;
 use std::path::Path;
 use std::process::exit;
@@ -11,7 +12,6 @@ use futures::future::TryFutureExt;
 use serde::Deserialize;
 use slog::{error, info, Logger};
 use structopt::StructOpt;
-use tokio::prelude::*;
 use tokio::runtime::Runtime;
 
 use crate::config::read_config;
@@ -45,7 +45,7 @@ where
         .and_then({
             let log = log.clone();
             move |config| {
-                let rt = Runtime::new().expect("could not get tokio runtime");
+                let mut rt = Runtime::new().expect("could not get tokio runtime");
 
                 rt.block_on(f(log, options, config).map_err(Into::into))
             }

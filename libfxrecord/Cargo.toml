@@ -7,9 +7,11 @@ license = "MPL-2.0"
 
 [dependencies]
 derive_more = "0.99.7"
+futures = "0.3.5"
 serde = { version = "1.0.110", features = ["derive"] }
 slog = "2.5.2"
 slog-async = "2.5.0"
 slog-term = "2.5.0"
 structopt = "0.3.14"
 toml = "0.5.6"
+tokio = "0.2.21"
