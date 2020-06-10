@@ -14,4 +14,6 @@ slog-async = "2.5.0"
 slog-term = "2.5.0"
 structopt = "0.3.14"
 toml = "0.5.6"
-tokio = "0.2.21"
+tokio = { version = "0.2.21", features = ["tcp"] }
+tokio-util = { version = "0.3.1", features = ["codec"] }
+tokio-serde = { version = "0.6.1", features = ["json"] }

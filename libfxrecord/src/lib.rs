@@ -3,8 +3,8 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use std::error::Error;
-use std::future::Future;
 use std::fmt::Debug;
+use std::future::Future;
 use std::path::Path;
 use std::process::exit;
 
@@ -20,6 +20,7 @@ use crate::logging::build_logger;
 pub mod config;
 pub mod error;
 pub mod logging;
+pub mod net;
 
 /// A trait for exposing options common to both fxrunner and fxrecorder.
 pub trait CommonOptions: StructOpt + Debug {
