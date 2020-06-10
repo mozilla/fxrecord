@@ -5,6 +5,14 @@ authors = ["Barret Rennie <barret@mozilla.com>"]
 edition = "2018"
 license = "MPL-2.0"
 
+[lib]
+name = "libfxrunner"
+path = "src/lib/lib.rs"
+
+[[bin]]
+name = "fxrunner"
+path = "src/bin/main.rs"
+
 [dependencies]
 derive_more = "0.99.7"
 libfxrecord = { path = "../libfxrecord" }

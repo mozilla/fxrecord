@@ -2,20 +2,16 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-mod config;
-mod proto;
-
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
 use libfxrecord::{run, CommonOptions};
+use libfxrecorder::config::Config;
 use slog::{info, Logger};
 use structopt::StructOpt;
 
-use crate::config::Config;
-
 #[derive(Debug, StructOpt)]
-#[structopt(name = "fxrunner", about = "Start FxRunner")]
+#[structopt(name = "fxrecorder", about = "Start FxRecorder")]
 struct Options {
     /// The configuration file to use.
     #[structopt(long = "config", default_value = "fxrecord.toml")]
@@ -29,20 +25,19 @@ impl CommonOptions for Options {
 }
 
 fn main() {
-    run::<Options, Config, _, _>(fxrunner, "fxrunner");
+    run::<Options, Config, _, _>(fxrecorder, "fxrecorder");
 }
 
-async fn fxrunner(log: Logger, _options: Options, config: Config) -> Result<(), Box<dyn Error>> {
-    use crate::proto::RunnerProto;
-    use tokio::net::TcpListener;
+async fn fxrecorder(log: Logger, _options: Options, config: Config) -> Result<(), Box<dyn Error>> {
+    use libfxrecorder::proto::RecorderProto;
+    use tokio::net::TcpStream;
 
-    let mut listener = TcpListener::bind(&config.host).await?;
-    let (stream, addr) = listener.accept().await?;
+    let stream = TcpStream::connect(&config.host).await?;
+    info!(log, "Connected"; "peer" => config.host);
 
-    info!(log, "Received connection"; "peer" => addr);
-    let mut proto = RunnerProto::new(log, stream);
+    let mut proto = RecorderProto::new(log, stream);
 
-    proto.handshake_reply().await?;
+    proto.handshake().await?;
 
     Ok(())
 }
