@@ -26,7 +26,7 @@ pub struct RecordingConfig {
     /// The name of the video capture device.
     ///
     /// This can be found via running:
-    /// ```
+    /// ```text
     /// ffmpeg -f dshow -list_devices true -i dummy
     /// ```
     ///
