@@ -3,6 +3,9 @@
 The fxrecord protocol is broken up into a number of sections:
 
 1. Handshake
+2. DownloadBuild
+3. SendProfile
+4. SendPrefs
 
 ## Message Format
 
@@ -47,3 +50,12 @@ reply with an error message inside its `HandshakeReply`:
 If the recorder requested a restart, it will then attempt to reconnect to the
 runner with exponential backoff and handshake again, this time not requesting
 a restart
+
+## 2. DownloadBuild
+
+After reconnecting, the next message from the recorder will be for the runner
+to download a specific build of Firefox from Taskcluster.
+
+> ![](/docs/diagrams/download-build.png)
+>
+> Figure 3: Download Build
