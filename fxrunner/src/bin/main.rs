@@ -8,8 +8,8 @@ use std::time::Duration;
 
 use libfxrecord::{run, CommonOptions};
 use libfxrunner::config::Config;
+use libfxrunner::osapi::WindowsShutdownProvider;
 use libfxrunner::proto::RunnerProto;
-use libfxrunner::shutdown::WindowsShutdownProvider;
 use libfxrunner::taskcluster::Taskcluster;
 use slog::{info, Logger};
 use structopt::StructOpt;

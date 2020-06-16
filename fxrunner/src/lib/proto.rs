@@ -16,7 +16,7 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio::task::spawn_blocking;
 
-use crate::shutdown::ShutdownProvider;
+use crate::osapi::ShutdownProvider;
 use crate::taskcluster::{Taskcluster, TaskclusterError};
 use crate::zip::{unzip, ZipError};
 

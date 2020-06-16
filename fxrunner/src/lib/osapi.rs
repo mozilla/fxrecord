@@ -2,7 +2,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-mod windows;
+//! Traits for interacting safely with OS-level APIs.
+
+mod error;
+mod handle;
+mod shutdown;
 
 /// A trait providing the ability to restart the current machine.
 pub trait ShutdownProvider {
@@ -31,19 +35,19 @@ impl WindowsShutdownProvider {
 }
 
 impl ShutdownProvider for WindowsShutdownProvider {
-    type Error = windows::ShutdownError;
+    type Error = shutdown::ShutdownError;
 
     #[cfg(debug_assertions)]
     fn initiate_restart(&self, reason: &str) -> Result<(), Self::Error> {
         if self.skip_restart {
             Ok(())
         } else {
-            windows::initiate_restart(reason)
+            shutdown::initiate_restart(reason)
         }
     }
 
     #[cfg(not(debug_assertions))]
     fn initiate_restart(&self, reason: &str) -> Result<(), Self::Error> {
-        windows::initiate_restart(reason)
+        shutdown::initiate_restart(reason)
     }
 }
