@@ -28,6 +28,12 @@ impl Handle {
     }
 }
 
+impl From<HANDLE> for Handle {
+    fn from(h: HANDLE) -> Self {
+        Handle(h)
+    }
+}
+
 impl Drop for Handle {
     fn drop(&mut self) {
         if !self.0.is_null() {

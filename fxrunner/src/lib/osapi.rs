@@ -4,17 +4,49 @@
 
 //! Traits for interacting safely with OS-level APIs.
 
+use std::error::Error;
+use std::fmt::Debug;
+use std::time::Duration;
+
+use derive_more::Display;
+use tokio::time::delay_for;
+
 mod error;
 mod handle;
+mod perf;
 mod shutdown;
+
+pub use error::WindowsError;
+pub use perf::IoCounters;
 
 /// A trait providing the ability to restart the current machine.
 pub trait ShutdownProvider {
     /// The error
-    type Error: std::error::Error + 'static;
+    type Error: Error + 'static;
 
     /// Initiate a restart with the given reason.
     fn initiate_restart(&self, reason: &str) -> Result<(), Self::Error>;
+}
+
+/// A trait providing the ability to retrieve disk and CPU performance
+/// information.
+pub trait PerfProvider: Debug {
+    /// The error type returned by [`get_disk_io_counters()`](trait.PerfProvider.html#method.get_disk_io_counters).
+    type DiskIoError: Error + 'static;
+
+    /// The error type returned by [`get_cpu_idle_time()`](trait.PerfProvider.html#method.get_cpu_idle_time).
+    type CpuTimeError: Error + 'static;
+
+    /// The number of attempts that [`cpu_and_disk_idle()`](fn.cpu_and_disk_idle.html) will make before timing out.
+    const ATTEMPT_COUNT: usize = 30;
+
+    /// Return raw read and write IO counters.
+    fn get_disk_io_counters(&self) -> Result<IoCounters, Self::DiskIoError>;
+
+    /// Return the percentage of the time that the CPU is idle.
+    ///
+    /// The returned value is between 0 and 1.
+    fn get_cpu_idle_time(&self) -> Result<f64, Self::CpuTimeError>;
 }
 
 /// A [`ShutdownProvider`](trait.ShutdownProvider.html) that uses the Windows API.
@@ -50,4 +82,78 @@ impl ShutdownProvider for WindowsShutdownProvider {
     fn initiate_restart(&self, reason: &str) -> Result<(), Self::Error> {
         shutdown::initiate_restart(reason)
     }
+}
+
+#[derive(Debug, Default)]
+pub struct WindowsPerfProvider;
+
+impl PerfProvider for WindowsPerfProvider {
+    type DiskIoError = perf::DiskIoError;
+    type CpuTimeError = WindowsError;
+
+    fn get_disk_io_counters(&self) -> Result<IoCounters, Self::DiskIoError> {
+        perf::get_disk_io_counters()
+    }
+
+    fn get_cpu_idle_time(&self) -> Result<f64, Self::CpuTimeError> {
+        perf::get_cpu_idle_time()
+    }
+}
+
+#[derive(Debug, Display)]
+pub enum WaitForIdleError<P>
+where
+    P: PerfProvider,
+{
+    #[display(fmt = "timed out waiting for CPU and disk to become idle")]
+    TimeoutError,
+    DiskIoError(P::DiskIoError),
+    CpuTimeError(P::CpuTimeError),
+}
+
+impl<P> Error for WaitForIdleError<P>
+where
+    P: PerfProvider,
+{
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            WaitForIdleError::TimeoutError => None,
+            WaitForIdleError::DiskIoError(ref e) => Some(e),
+            WaitForIdleError::CpuTimeError(ref e) => Some(e),
+        }
+    }
+}
+
+/// Wait for the CPU and disk to become idle.
+pub async fn cpu_and_disk_idle<P>(p: &P) -> Result<(), WaitForIdleError<P>>
+where
+    P: PerfProvider,
+{
+    const TARGET_CPU_IDLE_PERCENTAGE: f64 = 0.95;
+
+    let mut counters = p
+        .get_disk_io_counters()
+        .map_err(WaitForIdleError::DiskIoError)?;
+
+    for _ in 0..P::ATTEMPT_COUNT {
+        delay_for(Duration::from_millis(500)).await;
+
+        let new_counters = p
+            .get_disk_io_counters()
+            .map_err(WaitForIdleError::DiskIoError)?;
+        let idle = p
+            .get_cpu_idle_time()
+            .map_err(WaitForIdleError::CpuTimeError)?;
+
+        let delta_reads = new_counters.reads - counters.reads;
+        let delta_writes = new_counters.writes - counters.writes;
+
+        if idle >= TARGET_CPU_IDLE_PERCENTAGE && delta_reads == 0 && delta_writes == 0 {
+            return Ok(());
+        }
+
+        counters = new_counters;
+    }
+
+    Err(WaitForIdleError::TimeoutError)
 }
