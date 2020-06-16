@@ -59,3 +59,23 @@ to download a specific build of Firefox from Taskcluster.
 > ![](/docs/diagrams/download-build.png)
 >
 > Figure 3: Download Build
+
+## 3. SendProfile
+
+After fxrunner has downloaded a build, fxrecorder can optionally send a
+zipped profile for it to use when running Firefox. If it does, it will send a
+`SendProfile` message with the given profile size. It will then drop the
+protocol down to a raw TCP connection and transfer the profile as raw bytes.
+The runner will receive these bytes and write them to disk, then extract the
+profile.
+
+> ![](/docs/diagrams/send-profile.png)
+>
+> Figure 4: Send Profile
+
+However, if no preset profile is to be used, an empty `SendProfile` message is
+sent and fxrunner will have Firefox generate a new profile on start.
+
+> ![](/docs/diagrams/send-profile-empty.png)
+>
+> Figure 5: Send Profile (Empty Profile Case)
