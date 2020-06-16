@@ -79,3 +79,15 @@ sent and fxrunner will have Firefox generate a new profile on start.
 > ![](/docs/diagrams/send-profile-empty.png)
 >
 > Figure 5: Send Profile (Empty Profile Case)
+
+## 4. SendPrefs
+
+Next, the fxrecorder may send a list of prefs that fxrunner should use when
+running Firefox. If provided, they will be written to the `prefs.js` in the
+profile directory from the `SendProfile` phase. If no profile was transferred
+in that phase, a new profile directory will be created containing `prefs.js`.
+
+> ![](/docs/diagrams/send-prefs.png)
+>
+> Figure 6: Send Prefs
+
