@@ -69,7 +69,7 @@ where
     }
 
     /// Handshake with FxRecorder.
-    pub async fn handshake_reply(&mut self) -> Result<bool, RunnerProtoError<S::Error>> {
+    pub async fn handshake_reply(&mut self) -> Result<bool, RunnerProtoError<S>> {
         info!(self.log, "Handshaking ...");
         let Handshake { restart } = self.recv().await?;
 
@@ -98,7 +98,7 @@ where
     pub async fn download_build_reply(
         &mut self,
         download_dir: &Path,
-    ) -> Result<PathBuf, RunnerProtoError<S::Error>> {
+    ) -> Result<PathBuf, RunnerProtoError<S>> {
         let DownloadBuild { task_id } = self.recv().await?;
 
         info!(self.log, "Received build download request"; "task_id" => &task_id);
@@ -169,8 +169,9 @@ where
     pub async fn send_profile_reply(
         &mut self,
         download_dir: &Path,
-    ) -> Result<Option<PathBuf>, RunnerProtoError<S::Error>> {
+    ) -> Result<Option<PathBuf>, RunnerProtoError<S>> {
         info!(self.log, "Waiting for profile...");
+
         let SendProfile { profile_size } = self.recv().await?;
 
         let profile_size = match profile_size {
@@ -272,7 +273,7 @@ where
         stream: &mut TcpStream,
         download_dir: &Path,
         profile_size: u64,
-    ) -> Result<PathBuf, RunnerProtoError<S::Error>> {
+    ) -> Result<PathBuf, RunnerProtoError<S>> {
         let zip_path = download_dir.join("profile.zip");
         let mut f = File::create(&zip_path).await?;
 
@@ -281,10 +282,7 @@ where
         Ok(zip_path)
     }
 
-    pub async fn send_prefs_reply(
-        &mut self,
-        prefs_path: &Path,
-    ) -> Result<(), RunnerProtoError<S::Error>> {
+    pub async fn send_prefs_reply(&mut self, prefs_path: &Path) -> Result<(), RunnerProtoError<S>> {
         let SendPrefs { prefs } = self.recv().await?;
 
         if prefs.is_empty() {
@@ -327,10 +325,10 @@ where
 }
 
 #[derive(Debug, Display)]
-pub enum RunnerProtoError<S> {
+pub enum RunnerProtoError<S: ShutdownProvider> {
     Proto(ProtoError<RecorderMessageKind>),
 
-    Shutdown(S),
+    Shutdown(S::Error),
 
     Taskcluster(TaskclusterError),
 
@@ -345,7 +343,7 @@ pub enum RunnerProtoError<S> {
 
 impl<S> Error for RunnerProtoError<S>
 where
-    S: Error + 'static,
+    S: ShutdownProvider,
 {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
@@ -361,7 +359,7 @@ where
 
 impl<S> From<ProtoError<RecorderMessageKind>> for RunnerProtoError<S>
 where
-    S: Error + 'static,
+    S: ShutdownProvider,
 {
     fn from(e: ProtoError<RecorderMessageKind>) -> Self {
         RunnerProtoError::Proto(e)
@@ -370,7 +368,7 @@ where
 
 impl<S> From<TaskclusterError> for RunnerProtoError<S>
 where
-    S: Error + 'static,
+    S: ShutdownProvider,
 {
     fn from(e: TaskclusterError) -> Self {
         RunnerProtoError::Taskcluster(e)
@@ -378,7 +376,7 @@ where
 }
 impl<S> From<ZipError> for RunnerProtoError<S>
 where
-    S: Error + 'static,
+    S: ShutdownProvider,
 {
     fn from(e: ZipError) -> Self {
         RunnerProtoError::Zip(e)
@@ -387,7 +385,7 @@ where
 
 impl<S> From<io::Error> for RunnerProtoError<S>
 where
-    S: Error + 'static,
+    S: ShutdownProvider,
 {
     fn from(e: io::Error) -> Self {
         RunnerProtoError::Proto(ProtoError::Io(e))

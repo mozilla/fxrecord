@@ -24,7 +24,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
 use url::Url;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct TestShutdownProvider {
     error: Option<&'static str>,
 }
@@ -301,29 +301,25 @@ async fn test_download_build() {
         run_proto_test(
             &mut listener,
             TestShutdownProvider::default(),
-            |mut runner| {
-                async move {
-                    assert_matches!(
-                        runner
-                            .download_build_reply(download_dir.path())
-                            .await
-                            .unwrap_err(),
-                        RunnerProtoError::MissingFirefox
-                    );
-                }
+            |mut runner| async move {
+                assert_matches!(
+                    runner
+                        .download_build_reply(download_dir.path())
+                        .await
+                        .unwrap_err(),
+                    RunnerProtoError::MissingFirefox
+                );
             },
-            |mut recorder| {
-                async move {
-                    assert_matches!(
-                        recorder.download_build("foo").await.unwrap_err(),
-                        RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
-                            assert_eq!(
-                                e.to_string(),
-                                RunnerProtoError::<<TestShutdownProvider as ShutdownProvider>::Error>::MissingFirefox.to_string()
-                            );
-                        }
-                    );
-                }
+            |mut recorder| async move {
+                assert_matches!(
+                    recorder.download_build("foo").await.unwrap_err(),
+                    RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
+                        assert_eq!(
+                            e.to_string(),
+                            RunnerProtoError::<TestShutdownProvider>::MissingFirefox.to_string()
+                        );
+                    }
+                );
             },
         )
         .await;

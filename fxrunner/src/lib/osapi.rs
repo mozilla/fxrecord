@@ -20,7 +20,7 @@ pub use error::WindowsError;
 pub use perf::IoCounters;
 
 /// A trait providing the ability to restart the current machine.
-pub trait ShutdownProvider {
+pub trait ShutdownProvider: Debug {
     /// The error
     type Error: Error + 'static;
 
@@ -50,7 +50,7 @@ pub trait PerfProvider: Debug {
 }
 
 /// A [`ShutdownProvider`](trait.ShutdownProvider.html) that uses the Windows API.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct WindowsShutdownProvider {
     /// Whether or not to skip the actual restart.
     #[cfg(debug_assertions)]
