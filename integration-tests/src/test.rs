@@ -2,6 +2,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+mod mocks;
+
 use std::convert::TryInto;
 use std::env::current_dir;
 use std::future::Future;
@@ -9,10 +11,8 @@ use std::future::Future;
 use assert_matches::assert_matches;
 use futures::join;
 use indoc::indoc;
-use libfxrecord::error::ErrorMessage;
 use libfxrecord::net::*;
 use libfxrecorder::proto::{RecorderProto, RecorderProtoError};
-use libfxrunner::osapi::ShutdownProvider;
 use libfxrunner::proto::{RunnerProto, RunnerProtoError};
 use libfxrunner::taskcluster::{Taskcluster, TaskclusterError};
 use reqwest::StatusCode;
@@ -24,27 +24,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
 use url::Url;
 
-#[derive(Debug, Default)]
-pub struct TestShutdownProvider {
-    error: Option<&'static str>,
-}
-
-impl TestShutdownProvider {
-    pub fn with_error(s: &'static str) -> Self {
-        TestShutdownProvider { error: Some(s) }
-    }
-}
-
-impl ShutdownProvider for TestShutdownProvider {
-    type Error = ErrorMessage<&'static str>;
-
-    fn initiate_restart(&self, _reason: &str) -> Result<(), Self::Error> {
-        match self.error {
-            Some(ref e) => Err(ErrorMessage(e)),
-            None => Ok(()),
-        }
-    }
-}
+use crate::mocks::*;
 
 /// Generate a logger for testing.
 ///
