@@ -16,28 +16,37 @@ use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio::task::spawn_blocking;
 
-use crate::osapi::ShutdownProvider;
+use crate::osapi::{cpu_and_disk_idle, PerfProvider, ShutdownProvider, WaitForIdleError};
 use crate::taskcluster::{Taskcluster, TaskclusterError};
 use crate::zip::{unzip, ZipError};
 
 /// The runner side of the protocol.
-pub struct RunnerProto<S> {
+pub struct RunnerProto<S, P> {
     inner: Option<Proto<RecorderMessage, RunnerMessage, RecorderMessageKind, RunnerMessageKind>>,
     log: Logger,
     shutdown_handler: S,
     tc: Taskcluster,
+    perf_provider: P,
 }
 
-impl<S> RunnerProto<S>
+impl<S, P> RunnerProto<S, P>
 where
     S: ShutdownProvider,
+    P: PerfProvider + 'static,
 {
-    pub fn new(log: Logger, stream: TcpStream, shutdown_handler: S, tc: Taskcluster) -> Self {
+    pub fn new(
+        log: Logger,
+        stream: TcpStream,
+        shutdown_handler: S,
+        tc: Taskcluster,
+        perf_provider: P,
+    ) -> Self {
         Self {
             inner: Some(Proto::new(stream)),
             log,
             shutdown_handler,
             tc,
+            perf_provider,
         }
     }
 
@@ -69,7 +78,7 @@ where
     }
 
     /// Handshake with FxRecorder.
-    pub async fn handshake_reply(&mut self) -> Result<bool, RunnerProtoError<S>> {
+    pub async fn handshake_reply(&mut self) -> Result<bool, RunnerProtoError<S, P>> {
         info!(self.log, "Handshaking ...");
         let Handshake { restart } = self.recv().await?;
 
@@ -98,7 +107,7 @@ where
     pub async fn download_build_reply(
         &mut self,
         download_dir: &Path,
-    ) -> Result<PathBuf, RunnerProtoError<S>> {
+    ) -> Result<PathBuf, RunnerProtoError<S, P>> {
         let DownloadBuild { task_id } = self.recv().await?;
 
         info!(self.log, "Received build download request"; "task_id" => &task_id);
@@ -169,7 +178,7 @@ where
     pub async fn send_profile_reply(
         &mut self,
         download_dir: &Path,
-    ) -> Result<Option<PathBuf>, RunnerProtoError<S>> {
+    ) -> Result<Option<PathBuf>, RunnerProtoError<S, P>> {
         info!(self.log, "Waiting for profile...");
 
         let SendProfile { profile_size } = self.recv().await?;
@@ -273,7 +282,7 @@ where
         stream: &mut TcpStream,
         download_dir: &Path,
         profile_size: u64,
-    ) -> Result<PathBuf, RunnerProtoError<S>> {
+    ) -> Result<PathBuf, RunnerProtoError<S, P>> {
         let zip_path = download_dir.join("profile.zip");
         let mut f = File::create(&zip_path).await?;
 
@@ -282,7 +291,10 @@ where
         Ok(zip_path)
     }
 
-    pub async fn send_prefs_reply(&mut self, prefs_path: &Path) -> Result<(), RunnerProtoError<S>> {
+    pub async fn send_prefs_reply(
+        &mut self,
+        prefs_path: &Path,
+    ) -> Result<(), RunnerProtoError<S, P>> {
         let SendPrefs { prefs } = self.recv().await?;
 
         if prefs.is_empty() {
@@ -322,34 +334,63 @@ where
             }
         }
     }
+
+    pub async fn wait_for_idle_reply(&mut self) -> Result<(), RunnerProtoError<S, P>> {
+        self.recv::<WaitForIdle>().await?;
+
+        info!(self.log, "Waiting for CPU and disk to become idle...");
+
+        if let Err(e) = cpu_and_disk_idle(&self.perf_provider).await {
+            error!(self.log, "CPU and disk did not become idle"; "error" => %e);
+            self.send(WaitForIdleReply {
+                result: Err(e.into_error_message()),
+            })
+            .await?;
+
+            return Err(RunnerProtoError::WaitForIdle(e));
+        } else {
+            self.send(WaitForIdleReply { result: Ok(()) }).await?;
+        }
+
+        info!(self.log, "Did become idle");
+        Ok(())
+    }
 }
 
 #[derive(Debug, Display)]
-pub enum RunnerProtoError<S: ShutdownProvider> {
+pub enum RunnerProtoError<S, P>
+where
+    S: ShutdownProvider,
+    P: PerfProvider + 'static,
+{
+    #[display(fmt = "An empty profile was received")]
+    EmptyProfile,
+
+    #[display(fmt = "No firefox.exe in build artifact")]
+    MissingFirefox,
+
     Proto(ProtoError<RecorderMessageKind>),
 
     Shutdown(S::Error),
 
     Taskcluster(TaskclusterError),
 
-    #[display(fmt = "No firefox.exe in build artifact")]
-    MissingFirefox,
-
-    #[display(fmt = "An empty profile was received")]
-    EmptyProfile,
+    WaitForIdle(WaitForIdleError<P>),
 
     Zip(ZipError),
 }
 
-impl<S> Error for RunnerProtoError<S>
+impl<S, P> Error for RunnerProtoError<S, P>
 where
     S: ShutdownProvider,
+    P: PerfProvider + 'static,
 {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             RunnerProtoError::Proto(ref e) => Some(e),
             RunnerProtoError::Shutdown(ref e) => Some(e),
             RunnerProtoError::Taskcluster(ref e) => Some(e),
+            RunnerProtoError::WaitForIdle(ref e) => Some(e),
             RunnerProtoError::Zip(ref e) => Some(e),
             RunnerProtoError::MissingFirefox => None,
             RunnerProtoError::EmptyProfile => None,
@@ -357,35 +398,40 @@ where
     }
 }
 
-impl<S> From<ProtoError<RecorderMessageKind>> for RunnerProtoError<S>
+impl<S, P> From<ProtoError<RecorderMessageKind>> for RunnerProtoError<S, P>
 where
     S: ShutdownProvider,
+    P: PerfProvider,
 {
     fn from(e: ProtoError<RecorderMessageKind>) -> Self {
         RunnerProtoError::Proto(e)
     }
 }
 
-impl<S> From<TaskclusterError> for RunnerProtoError<S>
+impl<S, P> From<TaskclusterError> for RunnerProtoError<S, P>
 where
     S: ShutdownProvider,
+    P: PerfProvider,
 {
     fn from(e: TaskclusterError) -> Self {
         RunnerProtoError::Taskcluster(e)
     }
 }
-impl<S> From<ZipError> for RunnerProtoError<S>
+
+impl<S, P> From<ZipError> for RunnerProtoError<S, P>
 where
     S: ShutdownProvider,
+    P: PerfProvider,
 {
     fn from(e: ZipError) -> Self {
         RunnerProtoError::Zip(e)
     }
 }
 
-impl<S> From<io::Error> for RunnerProtoError<S>
+impl<S, P> From<io::Error> for RunnerProtoError<S, P>
 where
     S: ShutdownProvider,
+    P: PerfProvider,
 {
     fn from(e: io::Error) -> Self {
         RunnerProtoError::Proto(ProtoError::Io(e))

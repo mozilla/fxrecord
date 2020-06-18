@@ -242,6 +242,21 @@ impl RecorderProto {
 
         Ok(())
     }
+
+    pub async fn wait_for_idle(&mut self) -> Result<(), RecorderProtoError> {
+        info!(self.log, "Waiting for runner to become idle...");
+        self.send(WaitForIdle).await?;
+
+        let WaitForIdleReply { result } = self.recv().await?;
+
+        if let Err(e) = result {
+            error!(self.log, "Runner did not go idle"; "error" => %e);
+            Err(e.into())
+        } else {
+            info!(self.log, "Runner is now idle");
+            Ok(())
+        }
+    }
 }
 
 #[derive(Debug, Display)]

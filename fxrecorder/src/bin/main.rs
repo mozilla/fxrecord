@@ -103,6 +103,7 @@ async fn fxrecorder(log: Logger, options: Options, config: Config) -> Result<(),
             .send_profile(profile_path.as_ref().map(PathBuf::as_path))
             .await?;
         proto.send_prefs(prefs).await?;
+        proto.wait_for_idle().await?;
     }
 
     Ok(())

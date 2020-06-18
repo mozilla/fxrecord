@@ -13,6 +13,7 @@ use futures::join;
 use indoc::indoc;
 use libfxrecord::net::*;
 use libfxrecorder::proto::{RecorderProto, RecorderProtoError};
+use libfxrunner::osapi::WaitForIdleError;
 use libfxrunner::proto::{RunnerProto, RunnerProtoError};
 use libfxrunner::taskcluster::{Taskcluster, TaskclusterError};
 use reqwest::StatusCode;
@@ -53,11 +54,15 @@ where
         .unwrap();
 }
 
+type TestRunnerProto = RunnerProto<TestShutdownProvider, TestPerfProvider>;
+type TestRunnerProtoError = RunnerProtoError<TestShutdownProvider, TestPerfProvider>;
+
 /// Run a test with both the recorder and runner protocols.
 async fn run_proto_test<T, U>(
     listener: &mut TcpListener,
     shutdown: TestShutdownProvider,
-    runner_fn: impl FnOnce(RunnerProto<TestShutdownProvider>) -> T,
+    perf_provider: TestPerfProvider,
+    runner_fn: impl FnOnce(TestRunnerProto) -> T,
     recorder_fn: impl FnOnce(RecorderProto) -> U,
 ) where
     T: Future<Output = ()>,
@@ -67,7 +72,7 @@ async fn run_proto_test<T, U>(
 
     let runner = async {
         let (stream, _) = listener.accept().await.unwrap();
-        let proto = RunnerProto::new(test_logger(), stream, shutdown, test_tc());
+        let proto = TestRunnerProto::new(test_logger(), stream, shutdown, test_tc(), perf_provider);
 
         runner_fn(proto).await;
     };
@@ -90,6 +95,7 @@ async fn test_handshake() {
     run_proto_test(
         &mut listener,
         TestShutdownProvider::default(),
+        TestPerfProvider::default(),
         |_| async move {},
         |mut recorder| {
             async move {
@@ -108,6 +114,7 @@ async fn test_handshake() {
     run_proto_test(
         &mut listener,
         TestShutdownProvider::default(),
+        TestPerfProvider::default(),
         |mut runner| async move {
             assert_matches!(
                 runner.handshake_reply().await.unwrap_err(),
@@ -122,6 +129,7 @@ async fn test_handshake() {
     run_proto_test(
         &mut listener,
         TestShutdownProvider::default(),
+        TestPerfProvider::default(),
         |runner| async move {
             runner.into_inner().recv::<Handshake>().await.unwrap();
         },
@@ -138,6 +146,7 @@ async fn test_handshake() {
     run_proto_test(
         &mut listener,
         TestShutdownProvider::default(),
+        TestPerfProvider::default(),
         |mut runner| async move {
             assert!(runner.handshake_reply().await.unwrap());
         },
@@ -151,6 +160,7 @@ async fn test_handshake() {
     run_proto_test(
         &mut listener,
         TestShutdownProvider::default(),
+        TestPerfProvider::default(),
         |mut runner| async move {
             assert!(!runner.handshake_reply().await.unwrap());
         },
@@ -164,6 +174,7 @@ async fn test_handshake() {
     run_proto_test(
         &mut listener,
         TestShutdownProvider::with_error("could not shutdown"),
+        TestPerfProvider::default(),
         |mut runner| async move {
             assert_matches!(runner.handshake_reply().await.unwrap_err(),
                 RunnerProtoError::Shutdown(e) => {
@@ -206,6 +217,7 @@ async fn test_download_build() {
         run_proto_test(
             &mut listener,
             TestShutdownProvider::default(),
+            TestPerfProvider::default(),
             |mut runner| async move {
                 runner
                     .download_build_reply(download_dir.path())
@@ -234,6 +246,7 @@ async fn test_download_build() {
         run_proto_test(
             &mut listener,
             TestShutdownProvider::default(),
+            TestPerfProvider::default(),
             |mut runner| async move {
                 assert_matches!(
                     runner
@@ -281,6 +294,7 @@ async fn test_download_build() {
         run_proto_test(
             &mut listener,
             TestShutdownProvider::default(),
+            TestPerfProvider::default(),
             |mut runner| async move {
                 assert_matches!(
                     runner
@@ -296,7 +310,7 @@ async fn test_download_build() {
                     RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
                         assert_eq!(
                             e.to_string(),
-                            RunnerProtoError::<TestShutdownProvider>::MissingFirefox.to_string()
+                            TestRunnerProtoError::MissingFirefox.to_string()
                         );
                     }
                 );
@@ -321,6 +335,7 @@ async fn test_send_profile() {
         run_proto_test(
             &mut listener,
             TestShutdownProvider::default(),
+            TestPerfProvider::default(),
             |mut runner| {
                 let temp_path = tempdir.path();
                 async move {
@@ -346,6 +361,7 @@ async fn test_send_profile() {
         run_proto_test(
             &mut listener,
             TestShutdownProvider::default(),
+            TestPerfProvider::default(),
             |mut runner| {
                 let temp_path = tempdir.path();
                 async move {
@@ -378,6 +394,7 @@ async fn test_send_profile() {
         run_proto_test(
             &mut listener,
             TestShutdownProvider::default(),
+            TestPerfProvider::default(),
             |mut runner| {
                 let temp_path = tempdir.path();
                 async move {
@@ -414,6 +431,7 @@ async fn test_send_profile() {
         run_proto_test(
             &mut listener,
             TestShutdownProvider::default(),
+            TestPerfProvider::default(),
             |runner| {
                 let mut runner = runner.into_inner();
 
@@ -451,6 +469,7 @@ async fn test_send_profile() {
         run_proto_test(
             &mut listener,
             TestShutdownProvider::default(),
+            TestPerfProvider::default(),
             |runner| {
                 let mut runner = runner.into_inner();
                 async move {
@@ -490,6 +509,7 @@ async fn test_send_profile() {
         run_proto_test(
             &mut listener,
             TestShutdownProvider::default(),
+            TestPerfProvider::default(),
             |runner| {
                 let mut runner = runner.into_inner();
 
@@ -548,6 +568,7 @@ async fn test_send_profile() {
         run_proto_test(
             &mut listener,
             TestShutdownProvider::default(),
+            TestPerfProvider::default(),
             |runner| {
                 let mut runner = runner.into_inner();
 
@@ -624,6 +645,7 @@ async fn test_send_prefs() {
         run_proto_test(
             &mut listener,
             TestShutdownProvider::default(),
+            TestPerfProvider::default(),
             |mut runner| {
                 let prefs_path = prefs_path.clone();
                 async move {
@@ -649,6 +671,7 @@ async fn test_send_prefs() {
         run_proto_test(
             &mut listener,
             TestShutdownProvider::default(),
+            TestPerfProvider::default(),
             |mut runner| {
                 let prefs_path = prefs_path.clone();
                 async move {
@@ -718,6 +741,7 @@ async fn test_send_prefs() {
         run_proto_test(
             &mut listener,
             TestShutdownProvider::default(),
+            TestPerfProvider::default(),
             |mut runner| {
                 let prefs_path = prefs_path.clone();
                 async move {
@@ -751,4 +775,123 @@ async fn test_send_prefs() {
             )
         );
     }
+}
+
+#[tokio::test]
+async fn test_wait_for_idle() {
+    {
+        let mut listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+
+        run_proto_test(
+            &mut listener,
+            TestShutdownProvider::default(),
+            TestPerfProvider::default(),
+            |mut runner| async move {
+                runner.wait_for_idle_reply().await.unwrap();
+            },
+            |mut recorder| async move {
+                recorder.wait_for_idle().await.unwrap();
+            },
+        )
+        .await;
+
+        // Testing wait_for_idle when an error occurs getting disk IO counters.
+        run_proto_test(
+            &mut listener,
+            TestShutdownProvider::default(),
+            TestPerfProvider::with_failure(PerfFailureMode::DiskIoError("disk io error")),
+            |mut runner| async move {
+                assert_matches!(
+                   runner.wait_for_idle_reply().await.unwrap_err(),
+                   RunnerProtoError::WaitForIdle(WaitForIdleError::DiskIoError(e)) => {
+                       assert_eq!(e.to_string(), "disk io error");
+                   }
+                );
+            },
+            |mut recorder| async move {
+                assert_matches!(
+                    recorder.wait_for_idle().await.unwrap_err(),
+                    RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
+                        assert_eq!(e.to_string(), "disk io error");
+                    }
+                );
+            },
+        )
+        .await;
+
+        run_proto_test(
+            &mut listener,
+            TestShutdownProvider::default(),
+            TestPerfProvider::with_failure(PerfFailureMode::CpuTimeError("cpu time error")),
+            |mut runner| async move {
+                assert_matches!(
+                   runner.wait_for_idle_reply().await.unwrap_err(),
+                   RunnerProtoError::WaitForIdle(WaitForIdleError::CpuTimeError(e)) => {
+                       assert_eq!(e.to_string(), "cpu time error");
+                   }
+                )
+            },
+            |mut recorder| async move {
+                assert_matches!(
+                    recorder.wait_for_idle().await.unwrap_err(),
+                    RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
+                        assert_eq!(e.to_string(), "cpu time error");
+                    }
+                );
+            },
+        )
+        .await;
+    }
+
+    // These tests take 15 seconds each waiting for timeouts, so we run them in parallel.
+    let disk_never_idle = async {
+        let mut listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        run_proto_test(
+            &mut listener,
+            TestShutdownProvider::default(),
+            TestPerfProvider::with_failure(PerfFailureMode::DiskNeverIdle),
+            |mut runner| async move {
+                assert_matches!(
+                    runner.wait_for_idle_reply().await.unwrap_err(),
+                    RunnerProtoError::WaitForIdle(WaitForIdleError::TimeoutError)
+                );
+            },
+            |mut recorder| async move {
+                assert_matches!(
+                    recorder.wait_for_idle().await.unwrap_err(),
+                    RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
+                        assert_eq!(e.to_string(), WaitForIdleError::<TestPerfProvider>::TimeoutError.to_string());
+                    }
+                );
+            }
+
+        )
+        .await;
+    };
+
+    let cpu_never_idle = async {
+        let mut listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        run_proto_test(
+            &mut listener,
+            TestShutdownProvider::default(),
+            TestPerfProvider::with_failure(PerfFailureMode::CpuNeverIdle),
+            |mut runner| async move {
+                assert_matches!(
+                    runner.wait_for_idle_reply().await.unwrap_err(),
+                    RunnerProtoError::WaitForIdle(WaitForIdleError::TimeoutError)
+                );
+            },
+            |mut recorder| async move {
+                assert_matches!(
+                    recorder.wait_for_idle().await.unwrap_err(),
+                    RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
+                        assert_eq!(e.to_string(), WaitForIdleError::<TestPerfProvider>::TimeoutError.to_string());
+                    }
+                );
+            }
+
+        ).await;
+    };
+
+    join!(disk_never_idle, cpu_never_idle);
 }

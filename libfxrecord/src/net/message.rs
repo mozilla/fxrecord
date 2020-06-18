@@ -358,6 +358,9 @@ impl_message! {
     SendPrefs {
         prefs: Vec<(String, PrefValue)>,
     };
+
+    /// A request for the runner to wait for its CPU and disk to become idle.
+    WaitForIdle;
 }
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -405,6 +408,12 @@ impl_message! {
     /// A reply to a [`SendPrefs`](struct.SendPrefs.html) message from
     /// FxRecorder.
     SendPrefsReply {
+        result: Result<(), ErrorMessage<String>>,
+    };
+
+    /// A reply to a [`WaitForIdle`](struct.WaitForIdle.html) message from
+    /// FxRecorder.
+    WaitForIdleReply {
         result: Result<(), ErrorMessage<String>>,
     };
 }

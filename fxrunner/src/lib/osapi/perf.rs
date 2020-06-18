@@ -18,6 +18,7 @@ use winapi::um::winnt::{FILE_SHARE_READ, FILE_SHARE_WRITE};
 use crate::osapi::error::{get_last_error, WindowsError};
 use crate::osapi::handle::Handle;
 
+#[derive(Clone, Copy, Debug, Default)]
 pub struct IoCounters {
     pub reads: u32,
     pub writes: u32,

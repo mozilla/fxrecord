@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use libfxrecord::{run, CommonOptions};
 use libfxrunner::config::Config;
-use libfxrunner::osapi::WindowsShutdownProvider;
+use libfxrunner::osapi::{WindowsPerfProvider, WindowsShutdownProvider};
 use libfxrunner::proto::RunnerProto;
 use libfxrunner::taskcluster::Taskcluster;
 use slog::{info, Logger};
@@ -76,6 +76,7 @@ async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), B
                 stream,
                 shutdown_provider(&options),
                 Taskcluster::default(),
+                WindowsPerfProvider::default(),
             );
 
             if proto.handshake_reply().await? {
@@ -101,6 +102,8 @@ async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), B
             proto
                 .send_prefs_reply(&profile_path.join("user.js"))
                 .await?;
+
+            proto.wait_for_idle_reply().await?;
 
             info!(log, "Client disconnected");
         }
