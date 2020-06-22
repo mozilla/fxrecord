@@ -17,8 +17,18 @@ This repository follows a [code of conduct](CODE_OF_CONDUCT.md).
 
 Both `fxrunner` and `fxrecorder` require Rust 1.39+ for async/await support.
 
+### fxrunner
+
 The only supported operating system for `fxrunner` is Windows 10. It is a
-statically linked executable with no other dependencies.
+statically linked executable with no other dependencies. Additionally, it
+requires legacy IO counters to be enabled. This can be done by running the
+following once:
+
+```
+diskperf -Y
+```
+
+### fxrecorder
 
 `fxrecorder` is also a statically linked executable, but it has two
 additional requirements:

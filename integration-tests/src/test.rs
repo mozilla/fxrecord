@@ -843,7 +843,7 @@ async fn test_wait_for_idle() {
         .await;
     }
 
-    // These tests take 15 seconds each waiting for timeouts, so we run them in parallel.
+    // These tests take at least 500ms each waiting for timeouts, so we run them in parallel.
     let disk_never_idle = async {
         let mut listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         run_proto_test(
