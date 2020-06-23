@@ -6,6 +6,7 @@ The fxrecord protocol is broken up into a number of sections:
 2. DownloadBuild
 3. SendProfile
 4. SendPrefs
+5. WaitForIdle
 
 ## Message Format
 
@@ -91,3 +92,8 @@ in that phase, a new profile directory will be created containing `prefs.js`.
 >
 > Figure 6: Send Prefs
 
+## 5. WaitForIdle
+
+> ![](/docs/diagrams/wait-for-idle.png)
+>
+> Figure 7: Wait for Idle
