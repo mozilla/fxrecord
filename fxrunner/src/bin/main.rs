@@ -13,8 +13,6 @@ use libfxrunner::proto::RunnerProto;
 use libfxrunner::taskcluster::Taskcluster;
 use slog::{info, Logger};
 use structopt::StructOpt;
-use tempfile::TempDir;
-use tokio::fs::create_dir_all;
 use tokio::net::TcpListener;
 use tokio::time::delay_for;
 
@@ -79,31 +77,9 @@ async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), B
                 WindowsPerfProvider::default(),
             );
 
-            if proto.handshake_reply().await? {
+            if proto.handle_request().await? {
                 break;
             }
-            // We download everything into a temporary directory that will be
-            // cleaned up after the connection closes.
-            let download_dir = TempDir::new()?;
-            let firefox_bin = proto.download_build_reply(download_dir.path()).await?;
-            assert!(firefox_bin.is_file());
-
-            let profile_path = match proto.send_profile_reply(download_dir.path()).await? {
-                Some(profile_path) => profile_path,
-                None => {
-                    let profile_path = download_dir.path().join("profile");
-                    info!(log, "Creating new empty profile");
-                    create_dir_all(&profile_path).await?;
-                    profile_path
-                }
-            };
-            assert!(profile_path.is_dir());
-
-            proto
-                .send_prefs_reply(&profile_path.join("user.js"))
-                .await?;
-
-            proto.wait_for_idle_reply().await?;
 
             info!(log, "Client disconnected");
         }

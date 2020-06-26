@@ -11,7 +11,8 @@ use libfxrecord::error::ErrorExt;
 use libfxrecord::net::*;
 use libfxrecord::prefs::write_prefs;
 use slog::{error, info, Logger};
-use tokio::fs::{File, OpenOptions};
+use tempfile::TempDir;
+use tokio::fs::{create_dir_all, File, OpenOptions};
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio::task::spawn_blocking;
@@ -50,11 +51,282 @@ where
         }
     }
 
-    /// Consume the RunnerProto and return the underlying `Proto`.
-    pub fn into_inner(
-        self,
-    ) -> Proto<RecorderMessage, RunnerMessage, RecorderMessageKind, RunnerMessageKind> {
-        self.inner.unwrap()
+    /// Handle a request from the recorder.
+    pub async fn handle_request(&mut self) -> Result<bool, RunnerProtoError<S, P>> {
+        match self.recv::<Request>().await?.request {
+            RecorderRequest::NewRequest(req) => {
+                self.handle_new_request(req).await?;
+                Ok(true)
+            }
+
+            RecorderRequest::ResumeRequest(req) => {
+                self.handle_resume_request(req).await?;
+                Ok(false)
+            }
+        }
+    }
+
+    /// Handle a new request from the recorder.
+    async fn handle_new_request(
+        &mut self,
+        request: NewRequest,
+    ) -> Result<(), RunnerProtoError<S, P>> {
+        let download_dir = TempDir::new()?;
+
+        let firefox_bin = self
+            .download_build(&request.build_task_id, download_dir.path())
+            .await?;
+        assert!(firefox_bin.is_file());
+
+        let profile_path = match request.profile_size {
+            Some(profile_size) => self.recv_profile(profile_size, download_dir.path()).await?,
+            None => {
+                let profile_path = download_dir.path().join("profile");
+                info!(self.log, "Creating new empty profile");
+                create_dir_all(&profile_path).await?;
+                profile_path
+            }
+        };
+        assert!(profile_path.is_dir());
+
+        if request.prefs.len() > 0 {
+            let prefs_path = profile_path.join("user.js");
+            let mut f = match OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open(&prefs_path)
+                .await
+            {
+                Ok(f) => f,
+                Err(e) => {
+                    self.send(WritePrefs {
+                        result: Err(e.into_error_message()),
+                    })
+                    .await?;
+
+                    return Err(e.into());
+                }
+            };
+
+            if let Err(e) = write_prefs(&mut f, request.prefs.into_iter()).await {
+                self.send(WritePrefs {
+                    result: Err(e.into_error_message()),
+                })
+                .await?;
+                return Err(e.into());
+            }
+        }
+
+        self.send(WritePrefs { result: Ok(()) }).await?;
+
+        // TODO: Persist the profile and Firefox instance for a restart
+
+        if let Err(e) = self
+            .shutdown_handler
+            .initiate_restart("fxrunner: restarting for cold Firefox start")
+        {
+            // TODO: Once we persist firefox and profile, we need
+            error!(self.log, "Could not restart"; "error" => ?e);
+            self.send(Restarting {
+                result: Err(e.into_error_message()),
+            })
+            .await?;
+
+            return Err(RunnerProtoError::Shutdown(e));
+        }
+
+        self.send(Restarting { result: Ok(()) }).await?;
+
+        Ok(())
+    }
+
+    /// Handle a resume request from the runner.
+    async fn handle_resume_request(
+        &mut self,
+        _request: ResumeRequest,
+    ) -> Result<(), RunnerProtoError<S, P>> {
+        info!(self.log, "Received resumption request");
+
+        self.send(ResumeResponse { result: Ok(()) }).await?;
+
+        info!(self.log, "Waiting to become idle");
+
+        if let Err(e) = cpu_and_disk_idle(&self.perf_provider).await {
+            error!(self.log, "CPU and disk did not become idle"; "error" => %e);
+            self.send(WaitForIdle {
+                result: Err(e.into_error_message()),
+            })
+            .await?;
+
+            return Err(RunnerProtoError::WaitForIdle(e));
+        }
+        info!(self.log, "Became idle");
+
+        self.send(WaitForIdle { result: Ok(()) }).await?;
+
+        Ok(())
+    }
+
+    /// Download a build from taskcluster.
+    async fn download_build(
+        &mut self,
+        task_id: &str,
+        download_dir: &Path,
+    ) -> Result<PathBuf, RunnerProtoError<S, P>> {
+        info!(self.log, "Download build from Taskcluster"; "task_id" => &task_id);
+        self.send(DownloadBuild {
+            result: Ok(DownloadStatus::Downloading),
+        })
+        .await?;
+
+        let download_path = match self.tc.download_build_artifact(task_id, download_dir).await {
+            Ok(download_path) => download_path,
+            Err(e) => {
+                error!(self.log, "Could not download build"; "error" => ?e);
+                self.send(DownloadBuild {
+                    result: Err(e.into_error_message()),
+                })
+                .await?;
+                return Err(e.into());
+            }
+        };
+
+        self.send(DownloadBuild {
+            result: Ok(DownloadStatus::Downloaded),
+        })
+        .await?;
+        info!(self.log, "Extracting downloaded artifact...");
+
+        let unzip_result = spawn_blocking({
+            let download_dir = PathBuf::from(download_dir);
+            move || unzip(&download_path, &download_dir)
+        })
+        .await
+        .expect("unzip task was cancelled or panicked");
+
+        if let Err(e) = unzip_result {
+            self.send(DownloadBuild {
+                result: Err(e.into_error_message()),
+            })
+            .await?;
+            return Err(e.into());
+        }
+
+        let firefox_path = download_dir.join("firefox").join("firefox.exe");
+        if !firefox_path.exists() {
+            let err = RunnerProtoError::MissingFirefox;
+
+            self.send(DownloadBuild {
+                result: Err(err.into_error_message()),
+            })
+            .await?;
+
+            return Err(err);
+        }
+
+        info!(self.log, "Extracted build");
+        self.send(DownloadBuild {
+            result: Ok(DownloadStatus::Extracted),
+        })
+        .await?;
+        Ok(firefox_path)
+    }
+
+    /// Receive a profile from the recorder.
+    async fn recv_profile(
+        &mut self,
+        profile_size: u64,
+        download_dir: &Path,
+    ) -> Result<PathBuf, RunnerProtoError<S, P>> {
+        info!(self.log, "Receiving profile...");
+        self.send(RecvProfile {
+            result: Ok(DownloadStatus::Downloading),
+        })
+        .await?;
+
+        let mut stream = self.inner.take().unwrap().into_inner();
+        let result = Self::recv_profile_raw(&mut stream, download_dir, profile_size).await;
+        self.inner = Some(Proto::new(stream));
+
+        let zip_path = match result {
+            Ok(zip_path) => zip_path,
+            Err(e) => {
+                self.send(DownloadBuild {
+                    result: Err(e.into_error_message()),
+                })
+                .await?;
+                return Err(e.into());
+            }
+        };
+
+        info!(self.log, "Profile received; extracting...");
+        self.send(RecvProfile {
+            result: Ok(DownloadStatus::Downloaded),
+        })
+        .await?;
+
+        let unzip_path = download_dir.join("profile");
+
+        let unzip_result = spawn_blocking({
+            let zip_path = zip_path.clone();
+            let unzip_path = unzip_path.clone();
+            move || unzip(&zip_path, &unzip_path)
+        })
+        .await
+        .expect("unzip profile task was cancelled or panicked");
+
+        let stats = match unzip_result {
+            Ok(stats) => stats,
+            Err(e) => {
+                error!(self.log, "Could not extract profile"; "error" => ?e);
+
+                self.send(RecvProfile {
+                    result: Err(e.into_error_message()),
+                })
+                .await?;
+
+                return Err(e.into());
+            }
+        };
+
+        if stats.extracted == 0 {
+            error!(self.log, "Profile was empty");
+            let e = RunnerProtoError::EmptyProfile;
+            self.send(RecvProfile {
+                result: Err(e.into_error_message()),
+            })
+            .await?;
+
+            return Err(e);
+        }
+
+        info!(self.log, "Profile extracted");
+
+        let profile_dir = match stats.top_level_dir {
+            Some(top_level_dir) => unzip_path.join(top_level_dir),
+            None => unzip_path,
+        };
+
+        self.send(RecvProfile {
+            result: { Ok(DownloadStatus::Extracted) },
+        })
+        .await?;
+
+        Ok(profile_dir)
+    }
+
+    /// Receive the raw bytes of a profile from the recorder.
+    async fn recv_profile_raw(
+        stream: &mut TcpStream,
+        download_dir: &Path,
+        profile_size: u64,
+    ) -> Result<PathBuf, RunnerProtoError<S, P>> {
+        let zip_path = download_dir.join("profile.zip");
+        let mut f = File::create(&zip_path).await?;
+
+        tokio::io::copy(&mut stream.take(profile_size), &mut f).await?;
+
+        Ok(zip_path)
     }
 
     /// Send the given message to the runner.
@@ -75,285 +347,6 @@ where
         for<'de> M: MessageContent<'de, RecorderMessage, RecorderMessageKind>,
     {
         self.inner.as_mut().unwrap().recv::<M>().await
-    }
-
-    /// Handshake with FxRecorder.
-    pub async fn handshake_reply(&mut self) -> Result<bool, RunnerProtoError<S, P>> {
-        info!(self.log, "Handshaking ...");
-        let Handshake { restart } = self.recv().await?;
-
-        if restart {
-            if let Err(e) = self
-                .shutdown_handler
-                .initiate_restart("fxrecord: recorder requested restart")
-            {
-                error!(self.log, "an error occurred while handshaking"; "error" => ?e);
-                self.send(HandshakeReply {
-                    result: Err(e.into_error_message()),
-                })
-                .await?;
-
-                return Err(RunnerProtoError::Shutdown(e));
-            }
-            info!(self.log, "Restart requested; restarting ...");
-        }
-
-        self.send(HandshakeReply { result: Ok(()) }).await?;
-        info!(self.log, "Handshake complete");
-
-        Ok(restart)
-    }
-
-    pub async fn download_build_reply(
-        &mut self,
-        download_dir: &Path,
-    ) -> Result<PathBuf, RunnerProtoError<S, P>> {
-        let DownloadBuild { task_id } = self.recv().await?;
-
-        info!(self.log, "Received build download request"; "task_id" => &task_id);
-
-        self.send(DownloadBuildReply {
-            result: Ok(DownloadStatus::Downloading),
-        })
-        .await?;
-
-        match self
-            .tc
-            .download_build_artifact(&task_id, download_dir)
-            .await
-        {
-            Ok(download_path) => {
-                self.send(DownloadBuildReply {
-                    result: Ok(DownloadStatus::Downloaded),
-                })
-                .await?;
-
-                let unzip_result = spawn_blocking({
-                    let download_dir = PathBuf::from(download_dir);
-                    move || unzip(&download_path, &download_dir)
-                })
-                .await
-                .expect("unzip task was cancelled or panicked");
-
-                if let Err(e) = unzip_result {
-                    self.send(DownloadBuildReply {
-                        result: Err(e.into_error_message()),
-                    })
-                    .await?;
-
-                    Err(e.into())
-                } else {
-                    let firefox_path = download_dir.join("firefox").join("firefox.exe");
-
-                    if !firefox_path.exists() {
-                        let err = RunnerProtoError::MissingFirefox;
-                        self.send(DownloadBuildReply {
-                            result: Err(err.into_error_message()),
-                        })
-                        .await?;
-
-                        Err(err)
-                    } else {
-                        self.send(DownloadBuildReply {
-                            result: Ok(DownloadStatus::Extracted),
-                        })
-                        .await?;
-
-                        Ok(firefox_path)
-                    }
-                }
-            }
-
-            Err(e) => {
-                error!(self.log, "could not download build"; "error" => ?e);
-                self.send(DownloadBuildReply {
-                    result: Err(e.into_error_message()),
-                })
-                .await?;
-                Err(e.into())
-            }
-        }
-    }
-
-    pub async fn send_profile_reply(
-        &mut self,
-        download_dir: &Path,
-    ) -> Result<Option<PathBuf>, RunnerProtoError<S, P>> {
-        info!(self.log, "Waiting for profile...");
-
-        let SendProfile { profile_size } = self.recv().await?;
-
-        let profile_size = match profile_size {
-            Some(profile_size) => profile_size,
-            None => {
-                info!(self.log, "No profile provided");
-                self.send(SendProfileReply { result: Ok(None) }).await?;
-
-                return Ok(None);
-            }
-        };
-
-        info!(self.log, "Receiving profile...");
-        self.send(SendProfileReply {
-            result: Ok(Some(DownloadStatus::Downloading)),
-        })
-        .await?;
-
-        let mut stream = self.inner.take().unwrap().into_inner();
-        let result = Self::send_profile_reply_impl(
-            &mut stream,
-            download_dir,
-            profile_size,
-        )
-        .await;
-        self.inner = Some(Proto::new(stream));
-
-        info!(self.log, "Profile received; extracting...");
-
-        let zip_path = match result {
-            Ok(zip_path) => {
-                self.send(SendProfileReply {
-                    result: { Ok(Some(DownloadStatus::Downloaded)) },
-                })
-                .await?;
-                zip_path
-            }
-
-            Err(e) => {
-                self.send(SendProfileReply {
-                    result: { Err(e.into_error_message()) },
-                })
-                .await?;
-                return Err(e);
-            }
-        };
-
-        let unzip_path = download_dir.join("profile");
-
-        let unzip_result = spawn_blocking({
-            let zip_path = zip_path.clone();
-            let unzip_path = unzip_path.clone();
-            move || unzip(&zip_path, &unzip_path)
-        })
-        .await
-        .expect("unzip profile task was cancelled or panicked");
-
-        let stats = match unzip_result {
-            Ok(stats) => stats,
-            Err(e) => {
-                error!(self.log, "Could not extract profile"; "error" => ?e);
-
-                self.send(SendProfileReply {
-                    result: Err(e.into_error_message()),
-                })
-                .await?;
-
-                return Err(e.into());
-            }
-        };
-
-        if stats.extracted == 0 {
-            error!(self.log, "Profile was empty!");
-            let e = RunnerProtoError::EmptyProfile;
-            self.send(SendProfileReply {
-                result: Err(e.into_error_message()),
-            })
-            .await?;
-
-            return Err(e);
-        }
-
-        error!(self.log, "Profile extracted");
-
-        let profile_dir = match stats.top_level_dir {
-            Some(top_level_dir) => unzip_path.join(top_level_dir),
-            None => unzip_path,
-        };
-
-        self.send(SendProfileReply {
-            result: { Ok(Some(DownloadStatus::Extracted)) },
-        })
-        .await?;
-
-        Ok(Some(profile_dir))
-    }
-
-    async fn send_profile_reply_impl(
-        stream: &mut TcpStream,
-        download_dir: &Path,
-        profile_size: u64,
-    ) -> Result<PathBuf, RunnerProtoError<S, P>> {
-        let zip_path = download_dir.join("profile.zip");
-        let mut f = File::create(&zip_path).await?;
-
-        tokio::io::copy(&mut stream.take(profile_size), &mut f).await?;
-
-        Ok(zip_path)
-    }
-
-    pub async fn send_prefs_reply(
-        &mut self,
-        prefs_path: &Path,
-    ) -> Result<(), RunnerProtoError<S, P>> {
-        let SendPrefs { prefs } = self.recv().await?;
-
-        if prefs.is_empty() {
-            return self
-                .send(SendPrefsReply { result: Ok(()) })
-                .await
-                .map_err(Into::into);
-        }
-
-        let mut f = match OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(&prefs_path)
-            .await
-        {
-            Ok(f) => f,
-            Err(e) => {
-                self.send(SendPrefsReply {
-                    result: Err(e.into_error_message()),
-                })
-                .await?;
-                return Err(e.into());
-            }
-        };
-
-        match write_prefs(&mut f, prefs.into_iter()).await {
-            Ok(()) => {
-                self.send(SendPrefsReply { result: Ok(()) }).await?;
-                Ok(())
-            }
-            Err(e) => {
-                self.send(SendPrefsReply {
-                    result: Err(e.into_error_message()),
-                })
-                .await?;
-                Err(e.into())
-            }
-        }
-    }
-
-    pub async fn wait_for_idle_reply(&mut self) -> Result<(), RunnerProtoError<S, P>> {
-        self.recv::<WaitForIdle>().await?;
-
-        info!(self.log, "Waiting for CPU and disk to become idle...");
-
-        if let Err(e) = cpu_and_disk_idle(&self.perf_provider).await {
-            error!(self.log, "CPU and disk did not become idle"; "error" => %e);
-            self.send(WaitForIdleReply {
-                result: Err(e.into_error_message()),
-            })
-            .await?;
-
-            return Err(RunnerProtoError::WaitForIdle(e));
-        } else {
-            self.send(WaitForIdleReply { result: Ok(()) }).await?;
-        }
-
-        info!(self.log, "Did become idle");
-        Ok(())
     }
 }
 

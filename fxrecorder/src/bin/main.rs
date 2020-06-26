@@ -72,8 +72,12 @@ async fn fxrecorder(log: Logger, options: Options, config: Config) -> Result<(),
 
         let mut proto = RecorderProto::new(log.clone(), stream);
 
-        proto.handshake(true).await?;
+        proto
+            .send_new_request(&task_id, profile_path.as_ref().map(PathBuf::as_path), prefs)
+            .await?;
     }
+
+    info!(log, "Disconnected from runner. Waiting to reconnect...");
 
     {
         let reconnect = || {
@@ -97,13 +101,7 @@ async fn fxrecorder(log: Logger, options: Options, config: Config) -> Result<(),
 
         let mut proto = RecorderProto::new(log, stream);
 
-        proto.handshake(false).await?;
-        proto.download_build(&task_id).await?;
-        proto
-            .send_profile(profile_path.as_ref().map(PathBuf::as_path))
-            .await?;
-        proto.send_prefs(prefs).await?;
-        proto.wait_for_idle().await?;
+        proto.send_resume_request().await?;
     }
 
     Ok(())

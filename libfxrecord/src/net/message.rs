@@ -110,7 +110,7 @@ where
     fn kind() -> K;
 }
 
-/// An error that occurs when attempting to extract a message variant..
+/// An error that occurs when attempting to extract a message variant.
 #[derive(Debug, Display)]
 #[display(
     fmt = "could not convert message of kind `{}' to kind `{}'",
@@ -308,6 +308,7 @@ macro_rules! impl_message {
                 type Error = KindMismatch<$kind_ty>;
 
                 fn try_from(msg: $msg_ty) -> Result<Self, Self::Error> {
+                    #[allow(irrefutable_let_patterns)]
                     if let $msg_ty::$inner_ty(msg) = msg {
                         Ok(msg)
                     } else {
@@ -328,6 +329,54 @@ macro_rules! impl_message {
     };
 }
 
+/// A request from the recorder to the runner.
+#[derive(Debug, Deserialize, Serialize)]
+pub enum RecorderRequest {
+    /// A new request.
+    ///
+    /// If successful, the runner will restart and the recorder should send a
+    /// [`ResumeRequest`](enum.RecorderRequest.html#variant.ResumeRequest)
+    /// upon reconnection.
+    NewRequest(NewRequest),
+
+    /// A request to resume a [previous
+    /// request](enum.RecorderRequest.html#variant.NewRequest).
+    ResumeRequest(ResumeRequest),
+}
+
+impl From<NewRequest> for Request {
+    fn from(req: NewRequest) -> Request {
+        Request {
+            request: RecorderRequest::NewRequest(req),
+        }
+    }
+}
+
+impl From<ResumeRequest> for Request {
+    fn from(req: ResumeRequest) -> Request {
+        Request {
+            request: RecorderRequest::ResumeRequest(req),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct NewRequest {
+    /// The task ID of the Taskcluster build task.
+    ///
+    /// The build artifact from this task will be downloaded by the runner.
+    pub build_task_id: String,
+
+    /// The size of the profile that will be sent, if any.
+    pub profile_size: Option<u64>,
+
+    /// Prefs to override in the profile.
+    pub prefs: Vec<(String, PrefValue)>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ResumeRequest {}
+
 impl_message! {
     /// A message from FxRecorder to FxRunner.
     RecorderMessage,
@@ -335,35 +384,13 @@ impl_message! {
     /// The kind of a [`RecorderMessage`](struct.RecorderMessage.html).
     RecorderMessageKind;
 
-    /// A handshake from FxRecorder to FxRunner.
-    Handshake {
-        /// Whether or not the runner should restart.
-        restart: bool,
+    /// A request from the recorder to the runner.
+    Request {
+        request: RecorderRequest,
     };
-
-    /// A request to download a specific build of Firefox.
-    DownloadBuild {
-        /// The build task ID.
-        task_id: String,
-    };
-
-    /// A request to send a profile of the given size.
-    ///
-    /// A size of zero indicates that there is no profile.
-    SendProfile {
-        profile_size: Option<u64>,
-    };
-
-    /// A request for the runner to use the provided prefs.
-    SendPrefs {
-        prefs: Vec<(String, PrefValue)>,
-    };
-
-    /// A request for the runner to wait for its CPU and disk to become idle.
-    WaitForIdle;
 }
 
-#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Display, Eq, PartialEq, Serialize, Deserialize)]
 pub enum DownloadStatus {
     Downloading,
     Downloaded,
@@ -381,6 +408,8 @@ impl DownloadStatus {
     }
 }
 
+pub type ForeignResult<T> = Result<T, ErrorMessage<String>>;
+
 impl_message! {
     /// A message from FxRunner to FxRecorder.
     RunnerMessage,
@@ -388,32 +417,33 @@ impl_message! {
     /// The kind of a [`RunnerMessage`](struct.RunnerMessage.html).
     RunnerMessageKind;
 
-    /// A reply to a [`Handshake`](struct.Handshake.html) from FxRecorder.
-    HandshakeReply {
-        result: Result<(), ErrorMessage<String>>,
+    /// The status of the DownloadBuild phase.
+    DownloadBuild {
+        result: ForeignResult<DownloadStatus>,
     };
 
-    /// A reply to a [`DownloadBuild`](struct.DownloadBuild.html) message from
-    /// FxRecorder.
-    DownloadBuildReply {
-        result: Result<DownloadStatus, ErrorMessage<String>>,
+    /// The status of the RecvProfile phase.
+    RecvProfile {
+        result: ForeignResult<DownloadStatus>,
     };
 
-    /// A reply to a [`SendProfile`](struct.SendProfile.html) message from
-    /// FxRecorder.
-    SendProfileReply {
-        result: Result<Option<DownloadStatus>, ErrorMessage<String>>,
+    /// The status of the WritePrefs phase.
+    WritePrefs {
+        result: ForeignResult<()>,
     };
 
-    /// A reply to a [`SendPrefs`](struct.SendPrefs.html) message from
-    /// FxRecorder.
-    SendPrefsReply {
-        result: Result<(), ErrorMessage<String>>,
+    /// The status of the Restarting phase.
+    Restarting {
+        result: ForeignResult<()>,
     };
 
-    /// A reply to a [`WaitForIdle`](struct.WaitForIdle.html) message from
-    /// FxRecorder.
-    WaitForIdleReply {
-        result: Result<(), ErrorMessage<String>>,
+    /// The status of the ResumeResponse phase.
+    ResumeResponse {
+        result: ForeignResult<()>,
+    };
+
+    /// The status of the WaitForIdle phase.
+    WaitForIdle {
+        result: ForeignResult<()>,
     };
 }
