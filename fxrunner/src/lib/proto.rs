@@ -11,7 +11,6 @@ use libfxrecord::error::ErrorExt;
 use libfxrecord::net::*;
 use libfxrecord::prefs::write_prefs;
 use slog::{error, info, Logger};
-use tempfile::TempDir;
 use tokio::fs::{create_dir_all, File, OpenOptions};
 use tokio::net::TcpStream;
 use tokio::prelude::*;
@@ -28,6 +27,7 @@ pub struct RunnerProto<S, T, P> {
     shutdown_handler: S,
     tc: T,
     perf_provider: P,
+    working_dir: PathBuf,
 }
 
 impl<S, T, P> RunnerProto<S, T, P>
@@ -43,6 +43,7 @@ where
         shutdown_handler: S,
         tc: T,
         perf_provider: P,
+        working_dir: &Path,
     ) -> Result<bool, RunnerProtoError<S, T, P>> {
         let mut proto = Self {
             inner: Some(Proto::new(stream)),
@@ -50,6 +51,7 @@ where
             shutdown_handler,
             tc,
             perf_provider,
+            working_dir: working_dir.to_path_buf(),
         };
 
         match proto.recv::<Request>().await?.request {
@@ -69,17 +71,13 @@ where
         &mut self,
         request: NewRequest,
     ) -> Result<(), RunnerProtoError<S, T, P>> {
-        let download_dir = TempDir::new()?;
-
-        let firefox_bin = self
-            .download_build(&request.build_task_id, download_dir.path())
-            .await?;
+        let firefox_bin = self.download_build(&request.build_task_id).await?;
         assert!(firefox_bin.is_file());
 
         let profile_path = match request.profile_size {
-            Some(profile_size) => self.recv_profile(profile_size, download_dir.path()).await?,
+            Some(profile_size) => self.recv_profile(profile_size).await?,
             None => {
-                let profile_path = download_dir.path().join("profile");
+                let profile_path = self.working_dir.join("profile");
                 info!(self.log, "Creating new empty profile");
                 create_dir_all(&profile_path).await?;
                 profile_path
@@ -169,7 +167,6 @@ where
     async fn download_build(
         &mut self,
         task_id: &str,
-        download_dir: &Path,
     ) -> Result<PathBuf, RunnerProtoError<S, T, P>> {
         info!(self.log, "Download build from Taskcluster"; "task_id" => &task_id);
         self.send(DownloadBuild {
@@ -177,7 +174,11 @@ where
         })
         .await?;
 
-        let download_path = match self.tc.download_build_artifact(task_id, download_dir).await {
+        let download_path = match self
+            .tc
+            .download_build_artifact(task_id, &self.working_dir)
+            .await
+        {
             Ok(download_path) => download_path,
             Err(e) => {
                 error!(self.log, "Could not download build"; "error" => ?e);
@@ -196,7 +197,7 @@ where
         info!(self.log, "Extracting downloaded artifact...");
 
         let unzip_result = spawn_blocking({
-            let download_dir = PathBuf::from(download_dir);
+            let download_dir = self.working_dir.clone();
             move || unzip(&download_path, &download_dir)
         })
         .await
@@ -210,7 +211,7 @@ where
             return Err(e.into());
         }
 
-        let firefox_path = download_dir.join("firefox").join("firefox.exe");
+        let firefox_path = self.working_dir.join("firefox").join("firefox.exe");
         if !firefox_path.exists() {
             let err = RunnerProtoError::MissingFirefox;
 
@@ -234,7 +235,6 @@ where
     async fn recv_profile(
         &mut self,
         profile_size: u64,
-        download_dir: &Path,
     ) -> Result<PathBuf, RunnerProtoError<S, T, P>> {
         info!(self.log, "Receiving profile...");
         self.send(RecvProfile {
@@ -243,7 +243,7 @@ where
         .await?;
 
         let mut stream = self.inner.take().unwrap().into_inner();
-        let result = Self::recv_profile_raw(&mut stream, download_dir, profile_size).await;
+        let result = Self::recv_profile_raw(&mut stream, &self.working_dir, profile_size).await;
         self.inner = Some(Proto::new(stream));
 
         let zip_path = match result {
@@ -263,7 +263,7 @@ where
         })
         .await?;
 
-        let unzip_path = download_dir.join("profile");
+        let unzip_path = self.working_dir.join("profile");
 
         let unzip_result = spawn_blocking({
             let zip_path = zip_path.clone();

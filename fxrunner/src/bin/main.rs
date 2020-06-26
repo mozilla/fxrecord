@@ -13,6 +13,7 @@ use libfxrunner::proto::RunnerProto;
 use libfxrunner::taskcluster::FirefoxCi;
 use slog::{info, Logger};
 use structopt::StructOpt;
+use tempfile::TempDir;
 use tokio::net::TcpListener;
 use tokio::time::delay_for;
 
@@ -69,12 +70,15 @@ async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), B
             let (stream, addr) = listener.accept().await?;
             info!(log, "Received connection"; "peer" => addr);
 
+            let working_dir = TempDir::new().expect("could not create a temporary directory");
+
             if RunnerProto::handle_request(
                 log.clone(),
                 stream,
                 shutdown_provider(&options),
                 FirefoxCi::default(),
                 WindowsPerfProvider::default(),
+                working_dir.path(),
             )
             .await?
             {
