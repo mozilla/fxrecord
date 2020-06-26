@@ -3,9 +3,11 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use std::error::Error;
+use std::fmt::Debug;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use async_trait::async_trait;
 use derive_more::Display;
 use futures::prelude::*;
 use futures::try_join;
@@ -16,9 +18,9 @@ use tokio::prelude::*;
 /// The name of the artifact containing the result of a build job.
 pub const BUILD_ARTIFACT_NAME: &str = "public/build/target.zip";
 
-/// An error from Taskcluster
+/// An error from Firefox CI.
 #[derive(Debug, Display)]
-pub enum TaskclusterError {
+pub enum FirefoxCiError {
     /// An
     #[display(fmt = "IO error: {}", _0)]
     Io(io::Error),
@@ -36,32 +38,44 @@ pub enum TaskclusterError {
     StatusError(StatusCode),
 }
 
-impl From<io::Error> for TaskclusterError {
+impl From<io::Error> for FirefoxCiError {
     fn from(e: io::Error) -> Self {
-        TaskclusterError::Io(e)
+        FirefoxCiError::Io(e)
     }
 }
 
-impl From<url::ParseError> for TaskclusterError {
+impl From<url::ParseError> for FirefoxCiError {
     fn from(e: url::ParseError) -> Self {
-        TaskclusterError::UrlParse(e)
+        FirefoxCiError::UrlParse(e)
     }
 }
 
-impl Error for TaskclusterError {
+impl Error for FirefoxCiError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            TaskclusterError::Io(ref e) => Some(e),
-            TaskclusterError::UrlParse(ref e) => Some(e),
-            TaskclusterError::ListArtifacts(ref e) => Some(e),
-            TaskclusterError::DownloadArtifact(ref e) => Some(e),
-            TaskclusterError::StatusError(..) => None,
+            FirefoxCiError::Io(ref e) => Some(e),
+            FirefoxCiError::UrlParse(ref e) => Some(e),
+            FirefoxCiError::ListArtifacts(ref e) => Some(e),
+            FirefoxCiError::DownloadArtifact(ref e) => Some(e),
+            FirefoxCiError::StatusError(..) => None,
         }
     }
 }
 
+#[async_trait]
+pub trait Taskcluster: Debug {
+    type Error: Error + 'static;
+
+    async fn download_build_artifact(
+        &mut self,
+        task_id: &str,
+        download_dir: &Path,
+    ) -> Result<PathBuf, Self::Error>;
+}
+
 /// An API client to download Taskcluster build artifacts.
-pub struct Taskcluster {
+#[derive(Debug)]
+pub struct FirefoxCi {
     /// The reqwest Client used for all requests.
     client: Client,
 
@@ -69,9 +83,9 @@ pub struct Taskcluster {
     queue_url: Url,
 }
 
-impl Default for Taskcluster {
+impl Default for FirefoxCi {
     fn default() -> Self {
-        Taskcluster {
+        FirefoxCi {
             queue_url: Url::parse("https://firefox-ci-tc.services.mozilla.com/api/queue/v1/")
                 .unwrap(),
             client: Client::new(),
@@ -79,20 +93,26 @@ impl Default for Taskcluster {
     }
 }
 
-impl Taskcluster {
-    pub fn with_queue_url(queue_url: Url) -> Self {
-        Taskcluster {
+impl FirefoxCi {
+    #[cfg(test)]
+    pub(crate) fn with_queue_url(queue_url: Url) -> Self {
+        FirefoxCi {
             client: Client::new(),
             queue_url,
         }
     }
+}
+
+#[async_trait]
+impl Taskcluster for FirefoxCi {
+    type Error = FirefoxCiError;
 
     /// Download the build artifact from a Taskcluster task.
-    pub async fn download_build_artifact(
+    async fn download_build_artifact(
         &mut self,
         task_id: &str,
         download_dir: &Path,
-    ) -> Result<PathBuf, TaskclusterError> {
+    ) -> Result<PathBuf, FirefoxCiError> {
         let url = self.queue_url.join(&format!(
             "task/{}/artifacts/{}",
             task_id, BUILD_ARTIFACT_NAME
@@ -105,25 +125,25 @@ impl Taskcluster {
             .get(url)
             .send()
             .await
-            .map_err(TaskclusterError::DownloadArtifact)?;
+            .map_err(FirefoxCiError::DownloadArtifact)?;
 
         if !request.status().is_success() {
-            return Err(TaskclusterError::StatusError(request.status()));
+            return Err(FirefoxCiError::StatusError(request.status()));
         }
 
-        let mut file = File::create(&path).await.map_err(TaskclusterError::Io)?;
+        let mut file = File::create(&path).await.map_err(FirefoxCiError::Io)?;
 
         // Stream the first chunk ...
         let mut chunk = request
             .chunk()
             .await
-            .map_err(TaskclusterError::DownloadArtifact)?;
+            .map_err(FirefoxCiError::DownloadArtifact)?;
 
         // Then write the previous chunk to disk while streaming the next chunk.
         while let Some(content) = chunk {
             chunk = try_join!(
-                request.chunk().map_err(TaskclusterError::DownloadArtifact),
-                file.write_all(&content).map_err(TaskclusterError::Io),
+                request.chunk().map_err(FirefoxCiError::DownloadArtifact),
+                file.write_all(&content).map_err(FirefoxCiError::Io),
             )?
             .0;
         }
@@ -140,13 +160,15 @@ mod test {
     use reqwest::StatusCode;
     use tempfile::TempDir;
 
-    use crate::taskcluster::*;
+    use super::*;
 
-    fn test_queue_url() -> Url {
-        Url::parse(&mockito::server_url())
-            .unwrap()
-            .join("/api/queue/v1/")
-            .unwrap()
+    fn firefox_ci() -> FirefoxCi {
+        FirefoxCi::with_queue_url(
+            Url::parse(&mockito::server_url())
+                .unwrap()
+                .join("/api/queue/v1/")
+                .unwrap(),
+        )
     }
 
     #[tokio::test]
@@ -167,7 +189,7 @@ mod test {
 
         let download_dir = TempDir::new().unwrap();
 
-        Taskcluster::with_queue_url(test_queue_url())
+        firefox_ci()
             .download_build_artifact("foo", download_dir.path())
             .await
             .unwrap();
@@ -188,11 +210,11 @@ mod test {
         let download_dir = TempDir::new().unwrap();
 
         assert_matches!(
-            Taskcluster::with_queue_url(test_queue_url())
+            firefox_ci()
                 .download_build_artifact("foo", download_dir.path())
                 .await
                 .unwrap_err(),
-            TaskclusterError::StatusError(StatusCode::NOT_FOUND)
+            FirefoxCiError::StatusError(StatusCode::NOT_FOUND)
         );
 
         artifact_rsp.assert();
@@ -211,11 +233,11 @@ mod test {
         let download_dir = TempDir::new().unwrap();
 
         assert_matches!(
-            Taskcluster::with_queue_url(test_queue_url())
+            firefox_ci()
                 .download_build_artifact("foo", download_dir.path())
                 .await
                 .unwrap_err(),
-            TaskclusterError::StatusError(StatusCode::SERVICE_UNAVAILABLE)
+            FirefoxCiError::StatusError(StatusCode::SERVICE_UNAVAILABLE)
         );
 
         artifact_rsp.assert();

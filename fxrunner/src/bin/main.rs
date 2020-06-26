@@ -10,7 +10,7 @@ use libfxrecord::{run, CommonOptions};
 use libfxrunner::config::Config;
 use libfxrunner::osapi::{WindowsPerfProvider, WindowsShutdownProvider};
 use libfxrunner::proto::RunnerProto;
-use libfxrunner::taskcluster::Taskcluster;
+use libfxrunner::taskcluster::FirefoxCi;
 use slog::{info, Logger};
 use structopt::StructOpt;
 use tokio::net::TcpListener;
@@ -73,7 +73,7 @@ async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), B
                 log.clone(),
                 stream,
                 shutdown_provider(&options),
-                Taskcluster::default(),
+                FirefoxCi::default(),
                 WindowsPerfProvider::default(),
             )
             .await?

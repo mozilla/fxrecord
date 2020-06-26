@@ -18,21 +18,22 @@ use tokio::prelude::*;
 use tokio::task::spawn_blocking;
 
 use crate::osapi::{cpu_and_disk_idle, PerfProvider, ShutdownProvider, WaitForIdleError};
-use crate::taskcluster::{Taskcluster, TaskclusterError};
+use crate::taskcluster::Taskcluster;
 use crate::zip::{unzip, ZipError};
 
 /// The runner side of the protocol.
-pub struct RunnerProto<S, P> {
+pub struct RunnerProto<S, T, P> {
     inner: Option<Proto<RecorderMessage, RunnerMessage, RecorderMessageKind, RunnerMessageKind>>,
     log: Logger,
     shutdown_handler: S,
-    tc: Taskcluster,
+    tc: T,
     perf_provider: P,
 }
 
-impl<S, P> RunnerProto<S, P>
+impl<S, T, P> RunnerProto<S, T, P>
 where
     S: ShutdownProvider,
+    T: Taskcluster,
     P: PerfProvider + 'static,
 {
     /// Handle a request from the recorder.
@@ -40,9 +41,9 @@ where
         log: Logger,
         stream: TcpStream,
         shutdown_handler: S,
-        tc: Taskcluster,
+        tc: T,
         perf_provider: P,
-    ) -> Result<bool, RunnerProtoError<S, P>> {
+    ) -> Result<bool, RunnerProtoError<S, T, P>> {
         let mut proto = Self {
             inner: Some(Proto::new(stream)),
             log,
@@ -67,7 +68,7 @@ where
     async fn handle_new_request(
         &mut self,
         request: NewRequest,
-    ) -> Result<(), RunnerProtoError<S, P>> {
+    ) -> Result<(), RunnerProtoError<S, T, P>> {
         let download_dir = TempDir::new()?;
 
         let firefox_bin = self
@@ -141,7 +142,7 @@ where
     async fn handle_resume_request(
         &mut self,
         _request: ResumeRequest,
-    ) -> Result<(), RunnerProtoError<S, P>> {
+    ) -> Result<(), RunnerProtoError<S, T, P>> {
         info!(self.log, "Received resumption request");
 
         self.send(ResumeResponse { result: Ok(()) }).await?;
@@ -169,7 +170,7 @@ where
         &mut self,
         task_id: &str,
         download_dir: &Path,
-    ) -> Result<PathBuf, RunnerProtoError<S, P>> {
+    ) -> Result<PathBuf, RunnerProtoError<S, T, P>> {
         info!(self.log, "Download build from Taskcluster"; "task_id" => &task_id);
         self.send(DownloadBuild {
             result: Ok(DownloadStatus::Downloading),
@@ -184,7 +185,7 @@ where
                     result: Err(e.into_error_message()),
                 })
                 .await?;
-                return Err(e.into());
+                return Err(RunnerProtoError::Taskcluster(e));
             }
         };
 
@@ -234,7 +235,7 @@ where
         &mut self,
         profile_size: u64,
         download_dir: &Path,
-    ) -> Result<PathBuf, RunnerProtoError<S, P>> {
+    ) -> Result<PathBuf, RunnerProtoError<S, T, P>> {
         info!(self.log, "Receiving profile...");
         self.send(RecvProfile {
             result: Ok(DownloadStatus::Downloading),
@@ -317,7 +318,7 @@ where
         stream: &mut TcpStream,
         download_dir: &Path,
         profile_size: u64,
-    ) -> Result<PathBuf, RunnerProtoError<S, P>> {
+    ) -> Result<PathBuf, RunnerProtoError<S, T, P>> {
         let zip_path = download_dir.join("profile.zip");
         let mut f = File::create(&zip_path).await?;
 
@@ -348,9 +349,10 @@ where
 }
 
 #[derive(Debug, Display)]
-pub enum RunnerProtoError<S, P>
+pub enum RunnerProtoError<S, T, P>
 where
     S: ShutdownProvider,
+    T: Taskcluster,
     P: PerfProvider + 'static,
 {
     #[display(fmt = "An empty profile was received")]
@@ -363,16 +365,17 @@ where
 
     Shutdown(S::Error),
 
-    Taskcluster(TaskclusterError),
+    Taskcluster(T::Error),
 
     WaitForIdle(WaitForIdleError<P>),
 
     Zip(ZipError),
 }
 
-impl<S, P> Error for RunnerProtoError<S, P>
+impl<S, T, P> Error for RunnerProtoError<S, T, P>
 where
     S: ShutdownProvider,
+    T: Taskcluster,
     P: PerfProvider + 'static,
 {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
@@ -388,29 +391,21 @@ where
     }
 }
 
-impl<S, P> From<ProtoError<RecorderMessageKind>> for RunnerProtoError<S, P>
+impl<S, T, P> From<ProtoError<RecorderMessageKind>> for RunnerProtoError<S, T, P>
 where
     S: ShutdownProvider,
-    P: PerfProvider,
+    T: Taskcluster,
+    P: PerfProvider + 'static,
 {
     fn from(e: ProtoError<RecorderMessageKind>) -> Self {
         RunnerProtoError::Proto(e)
     }
 }
 
-impl<S, P> From<TaskclusterError> for RunnerProtoError<S, P>
+impl<S, T, P> From<ZipError> for RunnerProtoError<S, T, P>
 where
     S: ShutdownProvider,
-    P: PerfProvider,
-{
-    fn from(e: TaskclusterError) -> Self {
-        RunnerProtoError::Taskcluster(e)
-    }
-}
-
-impl<S, P> From<ZipError> for RunnerProtoError<S, P>
-where
-    S: ShutdownProvider,
+    T: Taskcluster,
     P: PerfProvider,
 {
     fn from(e: ZipError) -> Self {
@@ -418,9 +413,10 @@ where
     }
 }
 
-impl<S, P> From<io::Error> for RunnerProtoError<S, P>
+impl<S, T, P> From<io::Error> for RunnerProtoError<S, T, P>
 where
     S: ShutdownProvider,
+    T: Taskcluster,
     P: PerfProvider,
 {
     fn from(e: io::Error) -> Self {
