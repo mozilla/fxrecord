@@ -69,15 +69,15 @@ async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), B
             let (stream, addr) = listener.accept().await?;
             info!(log, "Received connection"; "peer" => addr);
 
-            let mut proto = RunnerProto::new(
+            if RunnerProto::handle_request(
                 log.clone(),
                 stream,
                 shutdown_provider(&options),
                 Taskcluster::default(),
                 WindowsPerfProvider::default(),
-            );
-
-            if proto.handle_request().await? {
+            )
+            .await?
+            {
                 break;
             }
 

@@ -35,37 +35,34 @@ where
     S: ShutdownProvider,
     P: PerfProvider + 'static,
 {
-    pub fn new(
+    /// Handle a request from the recorder.
+    pub async fn handle_request(
         log: Logger,
         stream: TcpStream,
         shutdown_handler: S,
         tc: Taskcluster,
         perf_provider: P,
-    ) -> Self {
-        Self {
+    ) -> Result<bool, RunnerProtoError<S, P>> {
+        let mut proto = Self {
             inner: Some(Proto::new(stream)),
             log,
             shutdown_handler,
             tc,
             perf_provider,
-        }
-    }
+        };
 
-    /// Handle a request from the recorder.
-    pub async fn handle_request(&mut self) -> Result<bool, RunnerProtoError<S, P>> {
-        match self.recv::<Request>().await?.request {
+        match proto.recv::<Request>().await?.request {
             RecorderRequest::NewRequest(req) => {
-                self.handle_new_request(req).await?;
+                proto.handle_new_request(req).await?;
                 Ok(true)
             }
 
             RecorderRequest::ResumeRequest(req) => {
-                self.handle_resume_request(req).await?;
+                proto.handle_resume_request(req).await?;
                 Ok(false)
             }
         }
     }
-
     /// Handle a new request from the recorder.
     async fn handle_new_request(
         &mut self,
