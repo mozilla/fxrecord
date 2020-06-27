@@ -660,12 +660,12 @@ name = "integration-tests"
 version = "0.1.0"
 dependencies = [
  "assert_matches",
+ "async-trait",
  "futures",
  "fxrecorder",
  "fxrunner",
  "indoc",
  "libfxrecord",
- "mockito",
  "reqwest",
  "serde_json",
  "slog",

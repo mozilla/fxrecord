@@ -3,9 +3,15 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use std::cell::RefCell;
+use std::path::{Path, PathBuf};
 
+use async_trait::async_trait;
 use libfxrecord::error::ErrorMessage;
 use libfxrunner::osapi::{IoCounters, PerfProvider, ShutdownProvider};
+use libfxrunner::taskcluster::Taskcluster;
+use tokio::fs;
+
+use crate::util::test_dir;
 
 #[derive(Debug, Default)]
 pub struct TestShutdownProvider {
@@ -26,6 +32,54 @@ impl ShutdownProvider for TestShutdownProvider {
             Some(ref e) => Err(ErrorMessage(e)),
             None => Ok(()),
         }
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct TestTaskcluster {
+    failure_mode: Option<TaskclusterFailureMode>,
+}
+
+#[derive(Debug)]
+pub enum TaskclusterFailureMode {
+    BadZip,
+    NotZip,
+    Generic(&'static str),
+}
+
+impl TestTaskcluster {
+    pub fn with_failure(failure_mode: TaskclusterFailureMode) -> Self {
+        Self {
+            failure_mode: Some(failure_mode),
+        }
+    }
+}
+
+#[async_trait]
+impl Taskcluster for TestTaskcluster {
+    type Error = ErrorMessage<&'static str>;
+
+    async fn download_build_artifact(
+        &mut self,
+        _task_id: &str,
+        download_dir: &Path,
+    ) -> Result<PathBuf, Self::Error> {
+        let zip_path = match self.failure_mode {
+            Some(TaskclusterFailureMode::Generic(e)) => {
+                return Err(ErrorMessage(e));
+            }
+            Some(TaskclusterFailureMode::BadZip) => test_dir().join("test.zip"),
+            Some(TaskclusterFailureMode::NotZip) => test_dir().join("README.md"),
+            None => test_dir().join("firefox.zip"),
+        };
+
+        let dest = download_dir.join("firefox.zip");
+
+        assert!(zip_path.exists());
+
+        fs::copy(&zip_path, &dest).await.unwrap();
+
+        Ok(dest)
     }
 }
 
