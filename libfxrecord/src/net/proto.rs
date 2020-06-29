@@ -2,12 +2,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use std::error::Error;
 use std::fmt::{Debug, Display};
 use std::io;
 
-use derive_more::Display;
 use futures::prelude::*;
+use thiserror::Error;
 use tokio::net::TcpStream;
 use tokio_serde::formats::Json;
 use tokio_util::codec::LengthDelimitedCodec;
@@ -100,51 +99,28 @@ where
 }
 
 /// An error in the protocol.
-#[derive(Debug, Display)]
+#[derive(Debug, Error)]
 pub enum ProtoError<K: Debug + Display> {
     /// An IO error occurred.
-    #[display(fmt = "IO error: {}", _0)]
-    Io(io::Error),
+    #[error("IO error: {}", .0)]
+    Io(#[from] io::Error),
 
     /// An error occurred on the remote side of the protocol.
     ///
     /// Due to the error being serialized across the protocol, the underlying
     /// error cannot have a cause.
-    #[display(fmt = "a remote error occurred: {}", _0)]
-    Foreign(ErrorMessage<String>),
+    #[error("a remote error occurred: {}", .0)]
+    Foreign(#[from] ErrorMessage<String>),
 
     /// The stream was closed unexpectedly.
-    #[display(fmt = "unexpected end of stream")]
+    #[error("unexpected end of stream")]
     EndOfStream,
 
     /// An unexpected message type arrived.
-    #[display(
-        fmt = "expected message of kind `{}' but received message of kind `{}'",
-        "_0.expected",
-        "_0.actual"
+    #[error(
+        "expected message of kind `{}' but received message of kind `{}'",
+        .0.expected,
+        .0.actual
     )]
     Unexpected(KindMismatch<K>),
-}
-
-impl<K: Debug + Display> Error for ProtoError<K> {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            ProtoError::Io(ref e) => Some(e),
-            ProtoError::Foreign(ref e) => Some(e),
-            ProtoError::EndOfStream => None,
-            ProtoError::Unexpected { .. } => None,
-        }
-    }
-}
-
-impl<K: Debug + Display> From<io::Error> for ProtoError<K> {
-    fn from(e: io::Error) -> Self {
-        ProtoError::Io(e)
-    }
-}
-
-impl<K: Debug + Display> From<ErrorMessage<String>> for ProtoError<K> {
-    fn from(e: ErrorMessage<String>) -> Self {
-        ProtoError::Foreign(e)
-    }
 }

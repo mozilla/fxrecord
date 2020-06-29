@@ -3,12 +3,11 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use std::convert::{TryFrom, TryInto};
-use std::error::Error;
 use std::io;
 
-use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use thiserror::Error;
 use tokio::prelude::*;
 
 /// The value of a pref.
@@ -19,37 +18,22 @@ pub struct PrefValue(Value);
 
 /// An error from attemtpting to coerce a `Value` into a
 /// [`PrefValue`](struct.PrefValue.html).
-#[derive(Debug, Display)]
+#[derive(Debug, Error)]
 pub enum PrefError {
-    #[display(fmt = "Pref values cannot be null")]
+    #[error("Pref values cannot be null")]
     Null,
 
-    #[display(fmt = "Pref values cannot be arrays")]
+    #[error("Pref values cannot be arrays")]
     Array,
 
-    #[display(fmt = "Pref values cannot be objects")]
+    #[error("Pref values cannot be objects")]
     Object,
 
-    #[display(fmt = "Expected a colon (`:') while parsing a pref")]
+    #[error("Expected a colon (`:') while parsing a pref")]
     ExpectedColon,
 
-    #[display(fmt = "Could not parse pref: {}", _0)]
-    Json(serde_json::Error),
-}
-
-impl Error for PrefError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            PrefError::Json(ref e) => Some(e),
-            _ => None,
-        }
-    }
-}
-
-impl From<serde_json::Error> for PrefError {
-    fn from(e: serde_json::Error) -> Self {
-        PrefError::Json(e)
-    }
+    #[error("Could not parse pref: {}", _0)]
+    Json(#[from] serde_json::Error),
 }
 
 impl TryFrom<Value> for PrefValue {

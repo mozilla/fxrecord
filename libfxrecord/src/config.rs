@@ -2,14 +2,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use derive_more::Display;
-
-use std::error::Error;
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
+use thiserror::Error;
 use toml::{self, Value};
 
 /// Read the given section from the given configuration file and deserialize it as a `T`.
@@ -54,42 +52,27 @@ where
 }
 
 /// An error occurred while loading or parsing a configuration file.
-#[derive(Debug, Display)]
+#[derive(Debug, Error)]
 pub enum ConfigError {
     /// The file could not be opened.
-    #[display(fmt = "Could not open config file `{}': {}", "path.display()", source)]
+    #[error("Could not open config file `{}': {}", .path.display(), .source)]
     OpenConfig { path: PathBuf, source: io::Error },
 
     /// The file could not be read.
-    #[display(fmt = "Could not read config file `{}': {}", "path.display()", source)]
+    #[error("Could not read config file `{}': {}", .path.display(), source)]
     ReadConfig { path: PathBuf, source: io::Error },
 
     /// The required section was missing from the config file.
-    #[display(
-        fmt = "Missing `{}' section in config file `{}'",
-        section,
-        "path.display()"
-    )]
+    #[error("Missing `{}' section in config file `{}'", .section, .path.display())]
     MissingSection {
         path: PathBuf,
         section: &'static str,
     },
 
     /// The file could not be parsed.
-    #[display(fmt = "Could not parse config file `{}': {}", "path.display()", source)]
+    #[error("Could not parse config file `{}': {}", "path.display()", .source)]
     Parse {
         path: PathBuf,
         source: toml::de::Error,
     },
-}
-
-impl Error for ConfigError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            ConfigError::OpenConfig { ref source, .. } => Some(source),
-            ConfigError::ReadConfig { ref source, .. } => Some(source),
-            ConfigError::MissingSection { .. } => None,
-            ConfigError::Parse { ref source, .. } => Some(source),
-        }
-    }
 }

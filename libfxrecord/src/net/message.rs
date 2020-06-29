@@ -81,11 +81,11 @@
 //! [impl_message]: ../../macro.impl_message.html
 
 use std::convert::TryFrom;
-use std::error::Error;
 use std::fmt::{Debug, Display};
 
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::error::ErrorMessage;
 use crate::prefs::PrefValue;
@@ -111,18 +111,16 @@ where
 }
 
 /// An error that occurs when attempting to extract a message variant.
-#[derive(Debug, Display)]
-#[display(
-    fmt = "could not convert message of kind `{}' to kind `{}'",
-    expected,
-    actual
+#[derive(Debug, Error)]
+#[error(
+    "could not convert message of kind `{}' to kind `{}'",
+    .expected,
+    .actual
 )]
 pub struct KindMismatch<K: Debug + Display> {
     pub expected: K,
     pub actual: K,
 }
-
-impl<K: Debug + Display> Error for KindMismatch<K> {}
 
 /// Generate an inner message type.
 ///

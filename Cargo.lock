@@ -734,6 +734,7 @@ dependencies = [
  "slog-async",
  "slog-term",
  "structopt",
+ "thiserror",
  "tokio",
  "tokio-serde",
  "tokio-util",
