@@ -421,7 +421,7 @@ async fn test_resume_request_ok() {
         &mut listener,
         TestShutdownProvider::default(),
         TestTaskcluster::default(),
-        TestPerfProvider::default(),
+        TestPerfProvider::asserting_invoked(),
         |mut recorder| async move {
             recorder.send_resume_request(true).await.unwrap();
         },
@@ -435,7 +435,7 @@ async fn test_resume_request_ok() {
         &mut listener,
         TestShutdownProvider::default(),
         TestTaskcluster::default(),
-        TestPerfProvider::default(),
+        TestPerfProvider::asserting_not_invoked(),
         |mut recorder| async move {
             recorder.send_resume_request(false).await.unwrap();
         },

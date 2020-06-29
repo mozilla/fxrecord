@@ -11,7 +11,7 @@ use libfxrunner::osapi::{IoCounters, PerfProvider, ShutdownProvider};
 use libfxrunner::taskcluster::Taskcluster;
 use tokio::fs;
 
-use crate::util::test_dir;
+use crate::util::{test_dir, AssertInvoked};
 
 #[derive(Debug, Default)]
 pub struct TestShutdownProvider {
@@ -83,12 +83,6 @@ impl Taskcluster for TestTaskcluster {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct TestPerfProvider {
-    failure_mode: Option<PerfFailureMode>,
-    io_counters: RefCell<IoCounters>,
-}
-
 #[derive(Debug)]
 pub enum PerfFailureMode {
     DiskIoError(&'static str),
@@ -97,12 +91,52 @@ pub enum PerfFailureMode {
     CpuNeverIdle,
 }
 
+#[derive(Debug)]
+pub struct TestPerfProvider {
+    failure_mode: Option<PerfFailureMode>,
+    io_counters: RefCell<IoCounters>,
+    assert_invoked: Option<RefCell<AssertInvoked>>,
+}
+
+impl Default for TestPerfProvider {
+    fn default() -> Self {
+        TestPerfProvider {
+            io_counters: Default::default(),
+            failure_mode: None,
+            assert_invoked: None,
+        }
+    }
+}
+
 impl TestPerfProvider {
     pub fn with_failure(mode: PerfFailureMode) -> Self {
         TestPerfProvider {
             io_counters: Default::default(),
             failure_mode: Some(mode),
+            assert_invoked: Some(RefCell::new(AssertInvoked::new("TestPerfProvider", true))),
         }
+    }
+
+    pub fn asserting_invoked() -> Self {
+        TestPerfProvider {
+            io_counters: Default::default(),
+            failure_mode: None,
+            assert_invoked: Some(RefCell::new(AssertInvoked::new("TestPerfProvider", true))),
+        }
+    }
+
+    pub fn asserting_not_invoked() -> Self {
+        TestPerfProvider {
+            io_counters: Default::default(),
+            failure_mode: None,
+            assert_invoked: Some(RefCell::new(AssertInvoked::new("TestPerfProvider", false))),
+        }
+    }
+
+    fn invoked(&self) {
+        self.assert_invoked
+            .as_ref()
+            .map(|ai| ai.borrow_mut().invoked());
     }
 }
 
@@ -113,6 +147,8 @@ impl PerfProvider for TestPerfProvider {
     const ATTEMPT_COUNT: usize = 1;
 
     fn get_disk_io_counters(&self) -> Result<IoCounters, Self::DiskIoError> {
+        self.invoked();
+
         match self.failure_mode {
             Some(PerfFailureMode::DiskIoError(s)) => Err(ErrorMessage(s)),
             Some(PerfFailureMode::DiskNeverIdle) => {
@@ -128,6 +164,8 @@ impl PerfProvider for TestPerfProvider {
     }
 
     fn get_cpu_idle_time(&self) -> Result<f64, Self::CpuTimeError> {
+        self.invoked();
+
         match self.failure_mode {
             Some(PerfFailureMode::CpuTimeError(s)) => Err(ErrorMessage(s)),
             Some(PerfFailureMode::CpuNeverIdle) => Ok(0f64),

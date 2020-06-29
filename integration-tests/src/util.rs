@@ -6,6 +6,42 @@ use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+/// A test helper that is used to assert an operation either occurred or did not
+/// before being dropped.
+#[derive(Debug)]
+pub struct AssertInvoked {
+    name: &'static str,
+    invoked: bool,
+    should_be_invoked: bool,
+}
+
+impl AssertInvoked {
+    pub fn new(name: &'static str, should_be_invoked: bool) -> Self {
+        AssertInvoked {
+            name,
+            invoked: false,
+            should_be_invoked,
+        }
+    }
+
+    pub fn invoked(&mut self) {
+        assert!(
+            self.should_be_invoked,
+            "{} was unexpectedly invoked",
+            self.name
+        );
+        self.invoked = true;
+    }
+}
+
+impl Drop for AssertInvoked {
+    fn drop(&mut self) {
+        if self.should_be_invoked && !self.invoked {
+            panic!("{} dropped without being invoked");
+        }
+    }
+}
+
 /// Return the path of the top level `test/` directory.
 pub fn test_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
