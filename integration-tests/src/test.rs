@@ -423,7 +423,21 @@ async fn test_resume_request_ok() {
         TestTaskcluster::default(),
         TestPerfProvider::default(),
         |mut recorder| async move {
-            recorder.send_resume_request().await.unwrap();
+            recorder.send_resume_request(true).await.unwrap();
+        },
+        |result, _working_dir| {
+            assert_eq!(result.unwrap(), false);
+        },
+    )
+    .await;
+
+    run_proto_test(
+        &mut listener,
+        TestShutdownProvider::default(),
+        TestTaskcluster::default(),
+        TestPerfProvider::default(),
+        |mut recorder| async move {
+            recorder.send_resume_request(false).await.unwrap();
         },
         |result, _working_dir| {
             assert_eq!(result.unwrap(), false);
@@ -444,7 +458,7 @@ async fn test_resume_request_err_waitforidle() {
         |mut recorder| async move {
             assert_matches!(
                 recorder
-                    .send_resume_request()
+                    .send_resume_request(true)
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -474,7 +488,7 @@ async fn test_resume_request_err_waitforidle() {
         |mut recorder| async move {
             assert_matches!(
                 recorder
-                    .send_resume_request()
+                    .send_resume_request(true)
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -504,7 +518,7 @@ async fn test_resume_request_err_waitforidle() {
         |mut recorder| async move {
             assert_matches!(
                 recorder
-                    .send_resume_request()
+                    .send_resume_request(true)
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -532,7 +546,7 @@ async fn test_resume_request_err_waitforidle() {
         |mut recorder| async move {
             assert_matches!(
                 recorder
-                    .send_resume_request()
+                    .send_resume_request(true)
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {

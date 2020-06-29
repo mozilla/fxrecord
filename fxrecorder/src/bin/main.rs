@@ -101,7 +101,7 @@ async fn fxrecorder(log: Logger, options: Options, config: Config) -> Result<(),
 
         let mut proto = RecorderProto::new(log, stream);
 
-        proto.send_resume_request().await?;
+        proto.send_resume_request(true).await?;
     }
 
     Ok(())

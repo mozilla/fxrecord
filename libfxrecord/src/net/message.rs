@@ -360,6 +360,16 @@ impl From<ResumeRequest> for Request {
     }
 }
 
+/// Whether the runner should wait to become idle.
+#[derive(Clone, Copy, Debug, Eq, Deserialize, PartialEq, Serialize)]
+pub enum Idle {
+    /// Wait to become idle.
+    Wait,
+
+    /// Skip waiting to become idle.
+    Skip,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct NewRequest {
     /// The task ID of the Taskcluster build task.
@@ -375,7 +385,10 @@ pub struct NewRequest {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct ResumeRequest {}
+pub struct ResumeRequest {
+    /// Whether or not the runner should wait for idle before running Firefox.
+    pub idle: Idle,
+}
 
 impl_message! {
     /// A message from FxRecorder to FxRunner.

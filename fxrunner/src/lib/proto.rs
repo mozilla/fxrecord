@@ -139,26 +139,28 @@ where
     /// Handle a resume request from the runner.
     async fn handle_resume_request(
         &mut self,
-        _request: ResumeRequest,
+        request: ResumeRequest,
     ) -> Result<(), RunnerProtoError<S, T, P>> {
         info!(self.log, "Received resumption request");
 
         self.send(ResumeResponse { result: Ok(()) }).await?;
 
-        info!(self.log, "Waiting to become idle");
+        if request.idle == Idle::Wait {
+            info!(self.log, "Waiting to become idle");
 
-        if let Err(e) = cpu_and_disk_idle(&self.perf_provider).await {
-            error!(self.log, "CPU and disk did not become idle"; "error" => %e);
-            self.send(WaitForIdle {
-                result: Err(e.into_error_message()),
-            })
-            .await?;
+            if let Err(e) = cpu_and_disk_idle(&self.perf_provider).await {
+                error!(self.log, "CPU and disk did not become idle"; "error" => %e);
+                self.send(WaitForIdle {
+                    result: Err(e.into_error_message()),
+                })
+                .await?;
 
-            return Err(RunnerProtoError::WaitForIdle(e));
+                return Err(RunnerProtoError::WaitForIdle(e));
+            }
+            info!(self.log, "Became idle");
+
+            self.send(WaitForIdle { result: Ok(()) }).await?;
         }
-        info!(self.log, "Became idle");
-
-        self.send(WaitForIdle { result: Ok(()) }).await?;
 
         Ok(())
     }

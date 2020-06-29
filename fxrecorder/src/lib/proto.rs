@@ -100,23 +100,25 @@ impl RecorderProto {
     }
 
     /// Send a resume request to the runner.
-    pub async fn send_resume_request(&mut self) -> Result<(), RecorderProtoError> {
+    pub async fn send_resume_request(&mut self, idle: Idle) -> Result<(), RecorderProtoError> {
         info!(self.log, "Resuming request");
-        self.send::<Request>(ResumeRequest {}.into()).await?;
+        self.send::<Request>(ResumeRequest { idle }.into()).await?;
 
         if let ResumeResponse { result: Err(e) } = self.recv().await? {
             error!(self.log, "Could not resume request with runner"; "error" => ?e);
             return Err(e.into());
         }
 
-        info!(self.log, "Waiting for runner to become idle...");
+        if idle == Idle::Wait {
+            info!(self.log, "Waiting for runner to become idle...");
 
-        if let WaitForIdle { result: Err(e) } = self.recv().await? {
-            error!(self.log, "Runner could not become idle"; "error" => ?e);
-            return Err(e.into());
+            if let WaitForIdle { result: Err(e) } = self.recv().await? {
+                error!(self.log, "Runner could not become idle"; "error" => ?e);
+                return Err(e.into());
+            }
+
+            info!(self.log, "Runner became idle");
         }
-
-        info!(self.log, "Runner became idle");
 
         Ok(())
     }
