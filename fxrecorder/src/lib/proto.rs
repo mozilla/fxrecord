@@ -2,15 +2,14 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use std::error::Error;
 use std::io;
 use std::path::Path;
 
-use derive_more::Display;
 use libfxrecord::error::ErrorMessage;
 use libfxrecord::net::*;
 use libfxrecord::prefs::PrefValue;
 use slog::{error, info, Logger};
+use thiserror::Error;
 use tokio::fs::File;
 use tokio::net::TcpStream;
 
@@ -222,12 +221,13 @@ impl RecorderProto {
     }
 }
 
-#[derive(Debug, Display)]
+#[derive(Debug, Error)]
 pub enum RecorderProtoError {
-    Proto(ProtoError<RunnerMessageKind>),
+    #[error(transparent)]
+    Proto(#[from] ProtoError<RunnerMessageKind>),
 
-    #[display(
-        fmt = "Expected a download status of `{}', but received `{}' instead",
+    #[error(
+        "Expected a download status of `{}', but received `{}' instead",
         expected,
         received
     )]
@@ -235,21 +235,6 @@ pub enum RecorderProtoError {
         expected: DownloadStatus,
         received: DownloadStatus,
     },
-}
-
-impl Error for RecorderProtoError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            RecorderProtoError::Proto(ref e) => Some(e),
-            RecorderProtoError::RecvProfileMismatch { .. } => None,
-        }
-    }
-}
-
-impl From<ProtoError<RunnerMessageKind>> for RecorderProtoError {
-    fn from(e: ProtoError<RunnerMessageKind>) -> Self {
-        RecorderProtoError::Proto(e)
-    }
 }
 
 impl From<ErrorMessage<String>> for RecorderProtoError {

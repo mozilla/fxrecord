@@ -6,11 +6,11 @@ use std::error::Error;
 use std::future::Future;
 use std::time::Duration;
 
-use derive_more::Display;
+use thiserror::Error;
 use tokio::time::delay_for;
 
-#[derive(Debug, Display)]
-#[display(fmt = "failed after {} retries", retries)]
+#[derive(Debug, Error)]
+#[error("failed after {} retries", retries)]
 /// An error that occurred when retrying a fallable operation.
 pub struct RetryError<E: Error + 'static> {
     /// The last error that occurred.
@@ -18,12 +18,6 @@ pub struct RetryError<E: Error + 'static> {
 
     /// The number of retries.
     retries: u32,
-}
-
-impl<E: Error + 'static> Error for RetryError<E> {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        Some(&self.source)
-    }
 }
 
 /// Attempt to resolve the future returned by the given function `retries` times
