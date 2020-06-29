@@ -2,15 +2,14 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use std::error::Error;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use derive_more::Display;
 use libfxrecord::error::ErrorExt;
 use libfxrecord::net::*;
 use libfxrecord::prefs::write_prefs;
 use slog::{error, info, Logger};
+use thiserror::Error;
 use tokio::fs::{create_dir_all, File, OpenOptions};
 use tokio::net::TcpStream;
 use tokio::prelude::*;
@@ -350,69 +349,33 @@ where
     }
 }
 
-#[derive(Debug, Display)]
+#[derive(Debug, Error)]
 pub enum RunnerProtoError<S, T, P>
 where
     S: ShutdownProvider,
     T: Taskcluster,
     P: PerfProvider + 'static,
 {
-    #[display(fmt = "An empty profile was received")]
+    #[error("An empty profile was received")]
     EmptyProfile,
 
-    #[display(fmt = "No firefox.exe in build artifact")]
+    #[error("No firefox.exe in build artifact")]
     MissingFirefox,
 
-    Proto(ProtoError<RecorderMessageKind>),
+    #[error(transparent)]
+    Proto(#[from] ProtoError<RecorderMessageKind>),
 
+    #[error(transparent)]
     Shutdown(S::Error),
 
+    #[error(transparent)]
     Taskcluster(T::Error),
 
+    #[error(transparent)]
     WaitForIdle(WaitForIdleError<P>),
 
-    Zip(ZipError),
-}
-
-impl<S, T, P> Error for RunnerProtoError<S, T, P>
-where
-    S: ShutdownProvider,
-    T: Taskcluster,
-    P: PerfProvider + 'static,
-{
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            RunnerProtoError::Proto(ref e) => Some(e),
-            RunnerProtoError::Shutdown(ref e) => Some(e),
-            RunnerProtoError::Taskcluster(ref e) => Some(e),
-            RunnerProtoError::WaitForIdle(ref e) => Some(e),
-            RunnerProtoError::Zip(ref e) => Some(e),
-            RunnerProtoError::MissingFirefox => None,
-            RunnerProtoError::EmptyProfile => None,
-        }
-    }
-}
-
-impl<S, T, P> From<ProtoError<RecorderMessageKind>> for RunnerProtoError<S, T, P>
-where
-    S: ShutdownProvider,
-    T: Taskcluster,
-    P: PerfProvider + 'static,
-{
-    fn from(e: ProtoError<RecorderMessageKind>) -> Self {
-        RunnerProtoError::Proto(e)
-    }
-}
-
-impl<S, T, P> From<ZipError> for RunnerProtoError<S, T, P>
-where
-    S: ShutdownProvider,
-    T: Taskcluster,
-    P: PerfProvider,
-{
-    fn from(e: ZipError) -> Self {
-        RunnerProtoError::Zip(e)
-    }
+    #[error(transparent)]
+    Zip(#[from] ZipError),
 }
 
 impl<S, T, P> From<io::Error> for RunnerProtoError<S, T, P>

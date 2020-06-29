@@ -2,13 +2,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use std::error::Error;
 use std::ffi::CString;
 use std::mem::forget;
 use std::ptr::{null, null_mut};
 
-use derive_more::Display;
 use libfxrecord::error::ErrorMessage;
+use thiserror::Error;
 use winapi::shared::minwindef::{DWORD, HLOCAL};
 use winapi::shared::ntdef::{LANG_NEUTRAL, LPSTR, MAKELANGID, SUBLANG_DEFAULT};
 use winapi::um::errhandlingapi::GetLastError;
@@ -20,23 +19,23 @@ use winapi::um::winbase::{
 /// An error from Windows.
 ///
 /// The error will be formatted with `FormatMessageA` if possible.
-#[derive(Debug, Display)]
+#[derive(Debug, Error)]
+#[error("{}", .0)]
 pub struct WindowsError(WindowsErrorImpl);
 
-impl Error for WindowsError {}
-
-#[derive(Debug, Display)]
+#[derive(Debug, Error)]
 enum WindowsErrorImpl {
-    #[display(
-        fmt = "An error occurred {:X}. Additionally, we could not format the error with FormatMessageA: {:X}.",
-        error_code,
-        format_error_code
+    #[error(
+        "An error occurred {:X}. Additionally, we could not format the error with FormatMessageA: {:X}.",
+        .error_code,
+        .format_error_code
     )]
     FormatMessageFailed {
         error_code: DWORD,
         format_error_code: DWORD,
     },
 
+    #[error(transparent)]
     Message(ErrorMessage<String>),
 }
 

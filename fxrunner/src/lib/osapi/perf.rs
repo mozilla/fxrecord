@@ -2,12 +2,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use std::error::Error;
 use std::ffi::CString;
 use std::ptr::null_mut;
 use std::u32;
 
-use derive_more::Display;
+use thiserror::Error;
 use winapi::shared::minwindef::FILETIME;
 use winapi::um::fileapi::{CreateFileA, OPEN_EXISTING};
 use winapi::um::ioapiset::DeviceIoControl;
@@ -24,26 +23,20 @@ pub struct IoCounters {
     pub writes: u32,
 }
 
-#[derive(Debug, Display)]
+#[derive(Debug, Error)]
 enum DiskIoErrorKind {
-    #[display(fmt = "could not open C:\\ drive")]
+    #[error("could not open C:\\ drive")]
     NoLogicalCDrive,
 
-    #[display(fmt = "could not retrieve IO counters for C:\\ drive")]
+    #[error("could not retrieve IO counters for C:\\ drive")]
     IoCounterError,
 }
 
-#[derive(Debug, Display)]
-#[display(fmt = "{}: {}", kind, source)]
+#[derive(Debug, Error)]
+#[error("{}: {}", .kind, .source)]
 pub struct DiskIoError {
     kind: DiskIoErrorKind,
     source: WindowsError,
-}
-
-impl Error for DiskIoError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        Some(&self.source)
-    }
 }
 
 pub(super) fn get_disk_io_counters() -> Result<IoCounters, DiskIoError> {

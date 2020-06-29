@@ -8,10 +8,10 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
-use derive_more::Display;
 use futures::prelude::*;
 use futures::try_join;
 use reqwest::{Client, StatusCode, Url};
+use thiserror::Error;
 use tokio::fs::File;
 use tokio::prelude::*;
 
@@ -19,47 +19,23 @@ use tokio::prelude::*;
 pub const BUILD_ARTIFACT_NAME: &str = "public/build/target.zip";
 
 /// An error from Firefox CI.
-#[derive(Debug, Display)]
+#[derive(Debug, Error)]
 pub enum FirefoxCiError {
     /// An
-    #[display(fmt = "IO error: {}", _0)]
-    Io(io::Error),
+    #[error("IO error: {}", .0)]
+    Io(#[from] io::Error),
 
-    #[display(fmt = "could not parse URL: {}", _0)]
-    UrlParse(url::ParseError),
+    #[error("could not parse URL: {}", .0)]
+    UrlParse(#[from] url::ParseError),
 
-    #[display(fmt = "could not list artifacts: {}", _0)]
-    ListArtifacts(reqwest::Error),
+    #[error("could not list artifacts: {}", .0)]
+    ListArtifacts(#[source] reqwest::Error),
 
-    #[display(fmt = "an error occurred while downloading the artifact: {}", _0)]
-    DownloadArtifact(reqwest::Error),
+    #[error("an error occurred while downloading the artifact: {}", .0)]
+    DownloadArtifact(#[source] reqwest::Error),
 
-    #[display(fmt = "an error occurred while downloading the artifact: {}", _0)]
+    #[error("an error occurred while downloading the artifact: {}", .0)]
     StatusError(StatusCode),
-}
-
-impl From<io::Error> for FirefoxCiError {
-    fn from(e: io::Error) -> Self {
-        FirefoxCiError::Io(e)
-    }
-}
-
-impl From<url::ParseError> for FirefoxCiError {
-    fn from(e: url::ParseError) -> Self {
-        FirefoxCiError::UrlParse(e)
-    }
-}
-
-impl Error for FirefoxCiError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            FirefoxCiError::Io(ref e) => Some(e),
-            FirefoxCiError::UrlParse(ref e) => Some(e),
-            FirefoxCiError::ListArtifacts(ref e) => Some(e),
-            FirefoxCiError::DownloadArtifact(ref e) => Some(e),
-            FirefoxCiError::StatusError(..) => None,
-        }
-    }
 }
 
 #[async_trait]

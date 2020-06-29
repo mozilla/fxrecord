@@ -2,12 +2,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use std::error::Error;
 use std::fs::{create_dir_all, File};
 use std::io;
 use std::path::{Path, PathBuf};
 
-use derive_more::Display;
+use thiserror::Error;
 use zip::ZipArchive;
 
 /// Statistics about an unzip operation.
@@ -101,29 +100,29 @@ fn common_stem(p1: &Path, p2: &Path) -> Option<PathBuf> {
     common
 }
 
-#[derive(Debug, Display)]
+#[derive(Debug, Error)]
 pub enum ZipError {
-    #[display(
-        fmt = "Could not open zip archive `{}': {}",
-        "archive.display()",
-        source
+    #[error(
+        "Could not open zip archive `{}': {}",
+        .archive.display(),
+        .source
     )]
     OpenArchive { archive: PathBuf, source: io::Error },
 
-    #[display(
-        fmt = "could not read zip archive `{}': {}",
-        "archive.display()",
-        source
+    #[error(
+        "could not read zip archive `{}': {}",
+        .archive.display(),
+        .source
     )]
     ReadArchive {
         archive: PathBuf,
         source: zip::result::ZipError,
     },
 
-    #[display(
-        fmt = "IO error while extracting file `{}' from archive `{}': {}",
-        "file_name.display()",
-        "archive.display()",
+    #[error(
+        "IO error while extracting file `{}' from archive `{}': {}",
+        .file_name.display(),
+        .archive.display(),
         source
     )]
     Io {
@@ -132,23 +131,12 @@ pub enum ZipError {
         source: io::Error,
     },
 
-    #[display(
-        fmt = "could not make required directory `{}': {}",
-        "path.display()",
-        source
+    #[error(
+        "could not make required directory `{}': {}",
+        .path.display(),
+        .source
     )]
     MakeDir { path: PathBuf, source: io::Error },
-}
-
-impl Error for ZipError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            ZipError::OpenArchive { ref source, .. } => Some(source),
-            ZipError::ReadArchive { ref source, .. } => Some(source),
-            ZipError::Io { ref source, .. } => Some(source),
-            ZipError::MakeDir { ref source, .. } => Some(source),
-        }
-    }
 }
 
 #[cfg(test)]

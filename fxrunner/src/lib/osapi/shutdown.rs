@@ -2,11 +2,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use std::error::Error;
 use std::ffi::CString;
 use std::ptr::null_mut;
 
-use derive_more::Display;
+use thiserror::Error;
 use winapi::shared::minwindef::{BOOL, DWORD};
 use winapi::shared::ntdef::{LPSTR, LUID};
 use winapi::um::processthreadsapi::{GetCurrentProcess, OpenProcessToken};
@@ -21,29 +20,23 @@ use winapi::um::winreg::InitiateSystemShutdownExA;
 use crate::osapi::error::{get_last_error, WindowsError};
 use crate::osapi::handle::Handle;
 
-#[derive(Debug, Display)]
+#[derive(Debug, Error)]
 enum ShutdownErrorKind {
-    #[display(fmt = "could not open process token")]
+    #[error("could not open process token")]
     OpenProcessToken,
-    #[display(fmt = "Could not lookup shutdown privilege")]
+    #[error("Could not lookup shutdown privilege")]
     LookupPrivilegeValue,
-    #[display(fmt = "Could not aquire shutdown privilege")]
+    #[error("Could not aquire shutdown privilege")]
     AdjustTokenPrivileges,
-    #[display(fmt = "InitiateSystemShutdownExA failed")]
+    #[error("InitiateSystemShutdownExA failed")]
     InitiateSystemShutdown,
 }
 
-#[derive(Debug, Display)]
-#[display(fmt = "{}: {}", kind, source)]
+#[derive(Debug, Error)]
+#[error("{}: {}", .kind, .source)]
 pub struct ShutdownError {
     kind: ShutdownErrorKind,
     source: WindowsError,
-}
-
-impl Error for ShutdownError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        Some(&self.source)
-    }
 }
 
 // See: https://docs.microsoft.com/en-us/windows/win32/shutdown/how-to-shut-down-the-system

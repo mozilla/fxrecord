@@ -483,7 +483,6 @@ version = "0.1.0"
 dependencies = [
  "assert_matches",
  "async-trait",
- "derive_more",
  "futures",
  "libfxrecord",
  "mockito",
@@ -493,6 +492,7 @@ dependencies = [
  "slog",
  "structopt",
  "tempfile",
+ "thiserror",
  "tokio",
  "toml",
  "url",

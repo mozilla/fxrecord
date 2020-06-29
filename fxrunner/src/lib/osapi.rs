@@ -8,7 +8,7 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::time::Duration;
 
-use derive_more::Display;
+use thiserror::Error;
 use tokio::time::delay_for;
 
 mod error;
@@ -100,28 +100,19 @@ impl PerfProvider for WindowsPerfProvider {
     }
 }
 
-#[derive(Debug, Display)]
+#[derive(Debug, Error)]
 pub enum WaitForIdleError<P>
 where
     P: PerfProvider,
 {
-    #[display(fmt = "timed out waiting for CPU and disk to become idle")]
+    #[error("timed out waiting for CPU and disk to become idle")]
     TimeoutError,
-    DiskIoError(P::DiskIoError),
-    CpuTimeError(P::CpuTimeError),
-}
 
-impl<P> Error for WaitForIdleError<P>
-where
-    P: PerfProvider,
-{
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            WaitForIdleError::TimeoutError => None,
-            WaitForIdleError::DiskIoError(ref e) => Some(e),
-            WaitForIdleError::CpuTimeError(ref e) => Some(e),
-        }
-    }
+    #[error(transparent)]
+    DiskIoError(P::DiskIoError),
+
+    #[error(transparent)]
+    CpuTimeError(P::CpuTimeError),
 }
 
 /// Wait for the CPU and disk to become idle.
