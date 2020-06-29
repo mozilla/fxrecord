@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use libfxrecord::error::ErrorMessage;
+use libfxrecord::net::Idle;
 use libfxrecord::prefs::{parse_pref, PrefValue};
 use libfxrecord::{run, CommonOptions};
 use libfxrecorder::config::Config;
@@ -38,6 +39,10 @@ struct Options {
     /// string, boolean, or number.
     #[structopt(long = "pref", number_of_values(1), parse(try_from_str = parse_pref))]
     prefs: Vec<(String, PrefValue)>,
+
+    /// Do not require the runner to become idle before running Firefox.
+    #[structopt(long)]
+    skip_idle: bool,
 }
 
 impl CommonOptions for Options {
@@ -101,7 +106,12 @@ async fn fxrecorder(log: Logger, options: Options, config: Config) -> Result<(),
 
         let mut proto = RecorderProto::new(log, stream);
 
-        proto.send_resume_request(true).await?;
+        let idle = if options.skip_idle {
+            Idle::Skip
+        } else {
+            Idle::Wait
+        };
+        proto.send_resume_request(idle).await?;
     }
 
     Ok(())
