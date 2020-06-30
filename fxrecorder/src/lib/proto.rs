@@ -139,8 +139,7 @@ impl RecorderProto {
                 return Err(RecorderProtoError::RecvProfileMismatch {
                     received: unexpected,
                     expected: DownloadStatus::Downloading,
-                }
-                .into())
+                });
             }
         }
 
@@ -160,9 +159,8 @@ impl RecorderProto {
             if expected != next_state {
                 return Err(RecorderProtoError::RecvProfileMismatch {
                     received: next_state,
-                    expected: expected,
-                }
-                .into());
+                    expected,
+                });
             }
 
             state = next_state;

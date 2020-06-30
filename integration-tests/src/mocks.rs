@@ -134,9 +134,9 @@ impl TestPerfProvider {
     }
 
     fn invoked(&self) {
-        self.assert_invoked
-            .as_ref()
-            .map(|ai| ai.borrow_mut().invoked());
+        if let Some(ai) = self.assert_invoked.as_ref() {
+            ai.borrow_mut().invoked();
+        }
     }
 }
 

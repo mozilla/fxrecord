@@ -78,7 +78,7 @@ async fn fxrecorder(log: Logger, options: Options, config: Config) -> Result<(),
         let mut proto = RecorderProto::new(log.clone(), stream);
 
         proto
-            .send_new_request(&task_id, profile_path.as_ref().map(PathBuf::as_path), prefs)
+            .send_new_request(&task_id, profile_path.as_deref(), prefs)
             .await?;
     }
 

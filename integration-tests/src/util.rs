@@ -37,7 +37,7 @@ impl AssertInvoked {
 impl Drop for AssertInvoked {
     fn drop(&mut self) {
         if self.should_be_invoked && !self.invoked {
-            panic!("{} dropped without being invoked");
+            panic!("{} dropped without being invoked", self.name);
         }
     }
 }
@@ -55,8 +55,7 @@ pub fn directory_is_empty(path: &Path) -> bool {
         .unwrap()
         .collect::<Result<Vec<_>, _>>()
         .unwrap()
-        .len()
-        == 0
+        .is_empty()
 }
 
 pub fn assert_populated_profile(profile_dir: &Path) {

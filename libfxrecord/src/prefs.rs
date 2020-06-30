@@ -116,6 +116,7 @@ mod test {
     }
 
     #[test]
+    #[allow(clippy::float_cmp)]
     fn test_try_from() {
         assert_matches!(PrefValue::try_from(Value::Null), Err(PrefError::Null));
         assert_matches!(

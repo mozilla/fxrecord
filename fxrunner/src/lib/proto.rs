@@ -84,7 +84,7 @@ where
         };
         assert!(profile_path.is_dir());
 
-        if request.prefs.len() > 0 {
+        if !request.prefs.is_empty() {
             let prefs_path = profile_path.join("user.js");
             let mut f = match OpenOptions::new()
                 .append(true)
@@ -254,7 +254,7 @@ where
                     result: Err(e.into_error_message()),
                 })
                 .await?;
-                return Err(e.into());
+                return Err(e);
             }
         };
 
