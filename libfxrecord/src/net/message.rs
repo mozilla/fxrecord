@@ -20,10 +20,22 @@
 //!
 //!    ```ignore
 //!    impl_message! {
+//!        /// The message type.
 //!        Msg,
+//!        /// The message kind enumeration.
 //!        MsgKind;
+//!        /// A message without any fields.
+//!        ///
+//!        /// This is the most simple kind of message.
 //!        FooMsg;
+//!
+//!        /// A "Bar msg"
+//!        ///
+//!        /// This message has a field.
 //!        BarMsg {
+//!            /// The contents of the message.
+//!            ///
+//!            /// The type of this field is `u32`.
 //!            field: u32,
 //!        };
 //!    }
@@ -143,7 +155,7 @@ macro_rules! impl_message_inner {
         $(#[doc = $doc:expr])*
         $name:ident {
         $(
-            $(#[doc = $field_doc:expr])?
+            $(#[doc = $field_doc:expr])*
             $field:ident : $field_ty:ty,
         )*
     }) => {
