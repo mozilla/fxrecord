@@ -486,6 +486,7 @@ dependencies = [
  "futures",
  "libfxrecord",
  "mockito",
+ "rand",
  "reqwest",
  "serde",
  "serde_json",

@@ -3,7 +3,9 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 pub mod config;
+pub mod fs;
 pub mod osapi;
 pub mod proto;
+pub mod request;
 pub mod taskcluster;
 pub mod zip;
