@@ -396,6 +396,9 @@ pub struct NewRequest {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ResumeRequest {
+    /// The ID of the request being resumed.
+    pub id: String,
+
     /// Whether or not the runner should wait for idle before running Firefox.
     pub idle: Idle,
 }
@@ -463,6 +466,12 @@ impl_message! {
     /// The status of the Restarting phase.
     Restarting {
         result: ForeignResult<()>,
+    };
+
+    /// The status of the NewRequest phase.
+    NewRequestResponse {
+        /// The request ID to be given in a `ResumeRequest`.
+        request_id: ForeignResult<String>,
     };
 
     /// The status of the ResumeResponse phase.

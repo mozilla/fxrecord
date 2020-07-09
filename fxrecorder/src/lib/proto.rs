@@ -34,7 +34,7 @@ impl RecorderProto {
         task_id: &str,
         profile_path: Option<&Path>,
         prefs: Vec<(String, PrefValue)>,
-    ) -> Result<(), RecorderProtoError> {
+    ) -> Result<String, RecorderProtoError> {
         info!(self.log, "Sending request");
 
         let profile_size = match profile_path {
@@ -51,6 +51,14 @@ impl RecorderProto {
             .into(),
         )
         .await?;
+
+        let request_id = match self.recv::<NewRequestResponse>().await?.request_id {
+            Ok(request_id) => request_id,
+            Err(e) => {
+                error!(self.log, "runner could not handle new request"; "error" => ?e);
+                return Err(e.into());
+            }
+        };
 
         loop {
             let DownloadBuild { result } = self.recv().await?;
@@ -99,13 +107,24 @@ impl RecorderProto {
 
         info!(self.log, "Runner is restarting...");
 
-        Ok(())
+        Ok(request_id)
     }
 
     /// Send a resume request to the runner.
-    pub async fn send_resume_request(&mut self, idle: Idle) -> Result<(), RecorderProtoError> {
+    pub async fn send_resume_request(
+        &mut self,
+        request_id: &str,
+        idle: Idle,
+    ) -> Result<(), RecorderProtoError> {
         info!(self.log, "Resuming request");
-        self.send::<Request>(ResumeRequest { idle }.into()).await?;
+        self.send::<Request>(
+            ResumeRequest {
+                id: request_id.into(),
+                idle,
+            }
+            .into(),
+        )
+        .await?;
 
         if let ResumeResponse { result: Err(e) } = self.recv().await? {
             error!(self.log, "Could not resume request with runner"; "error" => ?e);

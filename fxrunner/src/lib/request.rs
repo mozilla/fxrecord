@@ -152,7 +152,7 @@ impl RequestManager for FsRequestManager {
     }
 }
 
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub enum ResumeRequestErrorKind {
     #[error("ID contains invalid characters")]
     InvalidId,
@@ -167,7 +167,7 @@ pub enum ResumeRequestErrorKind {
     MissingFirefox,
 }
 
-#[derive(Clone, Debug, Error)]
+#[derive(Debug, Eq, Error, PartialEq)]
 #[error("Invalid request `{}': {}", .request_id, .kind)]
 pub struct ResumeRequestError {
     pub request_id: String,

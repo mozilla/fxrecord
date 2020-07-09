@@ -10,6 +10,7 @@ use libfxrecord::{run, CommonOptions};
 use libfxrunner::config::Config;
 use libfxrunner::osapi::{WindowsPerfProvider, WindowsShutdownProvider};
 use libfxrunner::proto::RunnerProto;
+use libfxrunner::request::FsRequestManager;
 use libfxrunner::taskcluster::FirefoxCi;
 use slog::{info, Logger};
 use structopt::StructOpt;
@@ -78,7 +79,7 @@ async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), B
                 shutdown_provider(&options),
                 FirefoxCi::default(),
                 WindowsPerfProvider::default(),
-                working_dir.path(),
+                FsRequestManager::new(working_dir.path()),
             )
             .await?
             {

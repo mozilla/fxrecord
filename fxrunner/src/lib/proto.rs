@@ -10,30 +10,33 @@ use libfxrecord::net::*;
 use libfxrecord::prefs::write_prefs;
 use slog::{error, info, Logger};
 use thiserror::Error;
-use tokio::fs::{create_dir_all, File, OpenOptions};
+use tokio::fs::{rename, File, OpenOptions};
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio::task::spawn_blocking;
 
+use crate::fs::PathExt;
 use crate::osapi::{cpu_and_disk_idle, PerfProvider, ShutdownProvider, WaitForIdleError};
+use crate::request::{NewRequestError, RequestInfo, RequestManager, ResumeRequestError};
 use crate::taskcluster::Taskcluster;
 use crate::zip::{unzip, ZipError};
 
 /// The runner side of the protocol.
-pub struct RunnerProto<S, T, P> {
+pub struct RunnerProto<S, T, P, R> {
     inner: Option<Proto<RecorderMessage, RunnerMessage, RecorderMessageKind, RunnerMessageKind>>,
     log: Logger,
     shutdown_handler: S,
     tc: T,
     perf_provider: P,
-    working_dir: PathBuf,
+    request_manager: R,
 }
 
-impl<S, T, P> RunnerProto<S, T, P>
+impl<S, T, P, R> RunnerProto<S, T, P, R>
 where
     S: ShutdownProvider,
     T: Taskcluster,
     P: PerfProvider + 'static,
+    R: RequestManager,
 {
     /// Handle a request from the recorder.
     pub async fn handle_request(
@@ -42,7 +45,7 @@ where
         shutdown_handler: S,
         tc: T,
         perf_provider: P,
-        working_dir: &Path,
+        request_manager: R,
     ) -> Result<bool, RunnerProtoError<S, T, P>> {
         let mut proto = Self {
             inner: Some(Proto::new(stream)),
@@ -50,7 +53,7 @@ where
             shutdown_handler,
             tc,
             perf_provider,
-            working_dir: working_dir.to_path_buf(),
+            request_manager,
         };
 
         match proto.recv::<Request>().await?.request {
@@ -70,30 +73,52 @@ where
         &mut self,
         request: NewRequest,
     ) -> Result<(), RunnerProtoError<S, T, P>> {
-        let firefox_bin = self.download_build(&request.build_task_id).await?;
-        assert!(firefox_bin.is_file());
+        let request_info = match self.request_manager.new_request().await {
+            Ok(request_info) => request_info,
+            Err(e) => {
+                self.send(NewRequestResponse {
+                    request_id: Err(e.into_error_message()),
+                })
+                .await?;
+                return Err(e.into());
+            }
+        };
+
+        self.send(NewRequestResponse {
+            request_id: Ok(request_info.id.clone().into_owned()),
+        })
+        .await?;
+
+        let firefox_bin = self
+            .download_build(&request_info, &request.build_task_id)
+            .await?;
+        assert!(firefox_bin.is_file_async().await);
 
         let profile_path = match request.profile_size {
-            Some(profile_size) => self.recv_profile(profile_size).await?,
+            Some(profile_size) => self.recv_profile(&request_info, profile_size).await?,
             None => {
-                let profile_path = self.working_dir.join("profile");
                 info!(self.log, "Creating new empty profile");
-                match create_dir_all(&profile_path).await {
+
+                let profile_path = match self
+                    .request_manager
+                    .ensure_valid_profile_dir(&request_info)
+                    .await
+                {
                     Ok(profile_path) => profile_path,
                     Err(e) => {
                         self.send(CreateProfile {
                             result: Err(e.into_error_message()),
                         })
                         .await?;
-                        return Err(e.into());
+                        return Err(RunnerProtoError::EnsureProfile(e));
                     }
-                }
-
+                };
                 self.send(CreateProfile { result: Ok(()) }).await?;
+
                 profile_path
             }
         };
-        assert!(profile_path.is_dir());
+        assert!(profile_path.is_dir_async().await);
 
         if !request.prefs.is_empty() {
             let prefs_path = profile_path.join("user.js");
@@ -125,13 +150,10 @@ where
 
         self.send(WritePrefs { result: Ok(()) }).await?;
 
-        // TODO: Persist the profile and Firefox instance for a restart
-
         if let Err(e) = self
             .shutdown_handler
             .initiate_restart("fxrunner: restarting for cold Firefox start")
         {
-            // TODO: Once we persist firefox and profile, we need
             error!(self.log, "Could not restart"; "error" => ?e);
             self.send(Restarting {
                 result: Err(e.into_error_message()),
@@ -152,6 +174,14 @@ where
         request: ResumeRequest,
     ) -> Result<(), RunnerProtoError<S, T, P>> {
         info!(self.log, "Received resumption request");
+
+        if let Err(e) = self.request_manager.resume_request(&request.id).await {
+            self.send(ResumeResponse {
+                result: Err(e.into_error_message()),
+            })
+            .await?;
+            return Err(e.into());
+        }
 
         self.send(ResumeResponse { result: Ok(()) }).await?;
 
@@ -176,8 +206,9 @@ where
     }
 
     /// Download a build from taskcluster.
-    async fn download_build(
+    async fn download_build<'a>(
         &mut self,
+        request_info: &'a RequestInfo<'a>,
         task_id: &str,
     ) -> Result<PathBuf, RunnerProtoError<S, T, P>> {
         info!(self.log, "Download build from Taskcluster"; "task_id" => &task_id);
@@ -188,7 +219,7 @@ where
 
         let download_path = match self
             .tc
-            .download_build_artifact(task_id, &self.working_dir)
+            .download_build_artifact(task_id, &request_info.path)
             .await
         {
             Ok(download_path) => download_path,
@@ -209,7 +240,7 @@ where
         info!(self.log, "Extracting downloaded artifact...");
 
         let unzip_result = spawn_blocking({
-            let download_dir = self.working_dir.clone();
+            let download_dir = PathBuf::from(&request_info.path);
             move || unzip(&download_path, &download_dir)
         })
         .await
@@ -223,8 +254,8 @@ where
             return Err(e.into());
         }
 
-        let firefox_path = self.working_dir.join("firefox").join("firefox.exe");
-        if !firefox_path.exists() {
+        let firefox_path = request_info.path.join("firefox").join("firefox.exe");
+        if !firefox_path.is_file_async().await {
             let err = RunnerProtoError::MissingFirefox;
 
             self.send(DownloadBuild {
@@ -246,6 +277,7 @@ where
     /// Receive a profile from the recorder.
     async fn recv_profile(
         &mut self,
+        request_info: &RequestInfo<'_>,
         profile_size: u64,
     ) -> Result<PathBuf, RunnerProtoError<S, T, P>> {
         info!(self.log, "Receiving profile...");
@@ -255,7 +287,7 @@ where
         .await?;
 
         let mut stream = self.inner.take().unwrap().into_inner();
-        let result = Self::recv_profile_raw(&mut stream, &self.working_dir, profile_size).await;
+        let result = Self::recv_profile_raw(&mut stream, &request_info.path, profile_size).await;
         self.inner = Some(Proto::new(stream));
 
         let zip_path = match result {
@@ -275,7 +307,12 @@ where
         })
         .await?;
 
-        let unzip_path = self.working_dir.join("profile");
+        // It is possible that the profile contains a top-level directory, in
+        // which case we don't want to directly extract to
+        // `request_info.path.join("profile")`. Instead, we unzip it to a
+        // temporary directory and then move the top level directory (which may
+        // be the path we extracted it to) to the target profile directory.
+        let unzip_path = request_info.path.join("unzipped_profile");
 
         let unzip_result = spawn_blocking({
             let zip_path = zip_path.clone();
@@ -310,12 +347,20 @@ where
             return Err(e);
         }
 
-        info!(self.log, "Profile extracted");
+        let unzipped_profile_dir = stats.top_level_dir.unwrap_or(unzip_path);
+        let profile_dir = request_info.path.join("profile");
+        if let Err(e) = rename(unzipped_profile_dir, &profile_dir).await {
+            error!(self.log, "Could not rename profile directory after extraction"; "error" => ?e);
 
-        let profile_dir = match stats.top_level_dir {
-            Some(top_level_dir) => unzip_path.join(top_level_dir),
-            None => unzip_path,
-        };
+            self.send(RecvProfile {
+                result: Err(e.into_error_message()),
+            })
+            .await?;
+
+            return Err(e.into());
+        }
+
+        info!(self.log, "Profile extracted");
 
         self.send(RecvProfile {
             result: { Ok(DownloadStatus::Extracted) },
@@ -387,6 +432,15 @@ where
 
     #[error(transparent)]
     Zip(#[from] ZipError),
+
+    #[error(transparent)]
+    NewRequest(#[from] NewRequestError),
+
+    #[error(transparent)]
+    ResumeRequest(#[from] ResumeRequestError),
+
+    #[error(transparent)]
+    EnsureProfile(io::Error),
 }
 
 impl<S, T, P> From<io::Error> for RunnerProtoError<S, T, P>

@@ -71,7 +71,7 @@ async fn fxrecorder(log: Logger, options: Options, config: Config) -> Result<(),
         }
     }
 
-    {
+    let request_id = {
         let stream = TcpStream::connect(&config.host).await?;
         info!(log, "Connected"; "peer" => config.host);
 
@@ -79,8 +79,8 @@ async fn fxrecorder(log: Logger, options: Options, config: Config) -> Result<(),
 
         proto
             .send_new_request(&task_id, profile_path.as_deref(), prefs)
-            .await?;
-    }
+            .await?
+    };
 
     info!(log, "Disconnected from runner. Waiting to reconnect...");
 
@@ -111,7 +111,7 @@ async fn fxrecorder(log: Logger, options: Options, config: Config) -> Result<(),
         } else {
             Idle::Wait
         };
-        proto.send_resume_request(idle).await?;
+        proto.send_resume_request(&request_id, idle).await?;
     }
 
     Ok(())
