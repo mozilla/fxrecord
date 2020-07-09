@@ -450,6 +450,11 @@ impl_message! {
         result: ForeignResult<DownloadStatus>,
     };
 
+    /// The result of the CreateProfile phase.
+    CreateProfile {
+        result: ForeignResult<()>,
+    };
+
     /// The status of the WritePrefs phase.
     WritePrefs {
         result: ForeignResult<()>,

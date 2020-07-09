@@ -78,7 +78,18 @@ where
             None => {
                 let profile_path = self.working_dir.join("profile");
                 info!(self.log, "Creating new empty profile");
-                create_dir_all(&profile_path).await?;
+                match create_dir_all(&profile_path).await {
+                    Ok(profile_path) => profile_path,
+                    Err(e) => {
+                        self.send(CreateProfile {
+                            result: Err(e.into_error_message()),
+                        })
+                        .await?;
+                        return Err(e.into());
+                    }
+                }
+
+                self.send(CreateProfile { result: Ok(()) }).await?;
                 profile_path
             }
         };

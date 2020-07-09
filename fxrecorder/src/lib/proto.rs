@@ -81,6 +81,10 @@ impl RecorderProto {
                 .await?
         } else {
             info!(self.log, "No profile to send");
+            if let Err(e) = self.recv::<CreateProfile>().await?.result {
+                error!(self.log, "Runner could not create profile"; "error" => ?e);
+                return Err(e.into());
+            }
         }
 
         if let WritePrefs { result: Err(e) } = self.recv().await? {
