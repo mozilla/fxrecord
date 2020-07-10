@@ -3,7 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use std::fs::File;
-use std::io::Read;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
 /// A test helper that is used to assert an operation either occurred or did not
@@ -53,6 +53,11 @@ pub fn test_dir() -> PathBuf {
 pub fn directory_is_empty(path: &Path) -> bool {
     path.read_dir()
         .unwrap()
+        .inspect(|result| {
+            if let Ok(ref entry) = result {
+                eprintln!("{} contains {:?}", path.display(), entry);
+            }
+        })
         .collect::<Result<Vec<_>, _>>()
         .unwrap()
         .is_empty()
@@ -74,4 +79,13 @@ pub fn assert_file_contents_eq(path: &Path, expected: &'static str) {
         buf
     };
     assert_eq!(contents, expected);
+}
+
+pub async fn touch(path: &Path) -> Result<(), io::Error> {
+    tokio::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(path)
+        .await
+        .map(drop)
 }
