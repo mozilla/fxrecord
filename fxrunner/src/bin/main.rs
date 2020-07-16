@@ -3,6 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use std::error::Error;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -12,7 +13,7 @@ use libfxrunner::osapi::{WindowsPerfProvider, WindowsShutdownProvider};
 use libfxrunner::proto::RunnerProto;
 use libfxrunner::request::FsRequestManager;
 use libfxrunner::taskcluster::FirefoxCi;
-use slog::{error, info, Logger};
+use slog::{error, info, warn, Logger};
 use structopt::StructOpt;
 use tokio::fs::create_dir_all;
 use tokio::net::TcpListener;
@@ -96,6 +97,13 @@ async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), B
             }
 
             info!(log, "Client disconnected");
+
+            // We aren't restarting, which means we handled a resume request. We
+            // only expect a single pending request at a time, so the request
+            // directory *should* be empty. If it isn't, then isn't empty it.
+            if let Err(e) = cleanup_requests_dir(log.clone(), &config.requests_dir).await {
+                error!(log, "Could not cleanup requests directory"; "error" => ?e);
+            }
         }
 
         info!(log, "Client disconnected for restart");
@@ -127,4 +135,16 @@ fn shutdown_provider(options: &Options) -> WindowsShutdownProvider {
 #[cfg(not(debug_assertions))]
 fn shutdown_provider(_: &Options) -> WindowsShutdownProvider {
     WindowsShutdownProvider::default()
+}
+
+async fn cleanup_requests_dir(log: slog::Logger, path: &Path) -> Result<(), io::Error> {
+    let mut entries = tokio::fs::read_dir(path).await?;
+
+    while let Some(entry) = entries.next_entry().await? {
+        let path = entry.path();
+        warn!(log, "requests directory was not empty"; "path" => path.display());
+        tokio::fs::remove_dir_all(&path).await?;
+    }
+
+    Ok(())
 }
