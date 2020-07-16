@@ -3,6 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use std::net::SocketAddr;
+use std::path::PathBuf;
 
 use serde::Deserialize;
 
@@ -11,4 +12,7 @@ use serde::Deserialize;
 pub struct Config {
     /// The address and port to listen on.
     pub host: SocketAddr,
+
+    /// The directory to store request state in.
+    pub requests_dir: PathBuf,
 }

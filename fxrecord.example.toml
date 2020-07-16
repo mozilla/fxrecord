@@ -11,3 +11,4 @@ buffer_size = "1000M"
 
 [fxrunner]
 host = "0.0.0.0:8888"
+requests_dir = "C:\\fxrunner\\requests"

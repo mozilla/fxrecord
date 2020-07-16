@@ -12,9 +12,9 @@ use libfxrunner::osapi::{WindowsPerfProvider, WindowsShutdownProvider};
 use libfxrunner::proto::RunnerProto;
 use libfxrunner::request::FsRequestManager;
 use libfxrunner::taskcluster::FirefoxCi;
-use slog::{info, Logger};
+use slog::{error, info, Logger};
 use structopt::StructOpt;
-use tempfile::TempDir;
+use tokio::fs::create_dir_all;
 use tokio::net::TcpListener;
 use tokio::time::delay_for;
 
@@ -62,6 +62,17 @@ fn main() {
 }
 
 async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), Box<dyn Error>> {
+    if let Err(e) = create_dir_all(&config.requests_dir).await {
+        error!(
+            log,
+            "Could not create requests directory";
+            "requests_dir" => config.requests_dir.display(),
+            "error" => ?e,
+        );
+
+        return Err(e.into());
+    }
+
     loop {
         let mut listener = TcpListener::bind(&config.host).await?;
 
@@ -71,15 +82,13 @@ async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), B
             let (stream, addr) = listener.accept().await?;
             info!(log, "Received connection"; "peer" => addr);
 
-            let working_dir = TempDir::new().expect("could not create a temporary directory");
-
             if RunnerProto::handle_request(
                 log.clone(),
                 stream,
                 shutdown_provider(&options),
                 FirefoxCi::default(),
                 WindowsPerfProvider::default(),
-                FsRequestManager::new(working_dir.path()),
+                FsRequestManager::new(&config.requests_dir),
             )
             .await?
             {
