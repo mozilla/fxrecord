@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use libfxrecord::error::ErrorExt;
 use libfxrecord::net::*;
 use libfxrecord::prefs::write_prefs;
+use scopeguard::{guard, ScopeGuard};
 use slog::{error, info, Logger};
 use thiserror::Error;
 use tokio::fs::{rename, File, OpenOptions};
@@ -83,6 +84,15 @@ where
                 return Err(e.into());
             }
         };
+
+        let cleanup = guard(
+            (request_info.clone(), self.log.clone()),
+            |(request_info, log)| {
+                if let Err(e) = std::fs::remove_dir_all(&request_info.path) {
+                    error!(log, "Could not cleanup request"; "request_id" => %request_info.id, "error" => ?e);
+                }
+            },
+        );
 
         self.send(NewRequestResponse {
             request_id: Ok(request_info.id.clone().into_owned()),
@@ -164,6 +174,8 @@ where
         }
 
         self.send(Restarting { result: Ok(()) }).await?;
+
+        drop(ScopeGuard::into_inner(cleanup));
 
         Ok(())
     }

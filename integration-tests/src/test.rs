@@ -335,13 +335,7 @@ async fn test_new_request_err_request_manager() {
 
             let request_info = request_info.unwrap();
             assert_eq!(request_info.id, VALID_REQUEST_ID);
-            assert!(request_info.path.join("firefox").is_dir());
-            assert!(request_info
-                .path
-                .join("firefox")
-                .join("firefox.exe")
-                .is_file());
-            assert!(!request_info.path.join("profile").exists());
+            assert!(!request_info.path.exists());
         },
     )
     .await;
@@ -377,12 +371,7 @@ async fn test_new_request_err_downloadbuild() {
             let request_info = request_info.unwrap();
             assert_eq!(request_info.id, VALID_REQUEST_ID);
 
-            assert!(!request_info.path.join("firefox").exists());
-            assert!(!request_info
-                .path
-                .join("firefox")
-                .join("firefox.exe")
-                .exists());
+            assert!(!request_info.path.exists());
         },
     )
     .await;
@@ -417,12 +406,7 @@ async fn test_new_request_err_downloadbuild() {
 
             let request_info = request_info.unwrap();
             assert_eq!(request_info.id, VALID_REQUEST_ID);
-            assert!(!request_info.path.join("firefox").exists());
-            assert!(!request_info
-                .path
-                .join("firefox")
-                .join("firefox.exe")
-                .exists());
+            assert!(!request_info.path.exists());
         },
     )
     .await;
@@ -465,8 +449,7 @@ async fn test_new_request_err_downloadbuild() {
                 }
             );
 
-            assert!(!request_info.path.join("firefox").exists());
-            assert!(!request_info.path.join("firefox").join("firefox.exe").exists());
+            assert!(!request_info.path.exists());
         },
     )
     .await;
@@ -515,8 +498,7 @@ async fn test_new_request_err_recvprofile() {
                 }
             );
 
-            assert!(request_info.path.join("firefox").join("firefox.exe").is_file());
-            assert!(!request_info.path.join("profile").is_dir());
+            assert!(!request_info.path.exists());
         },
     )
     .await;
@@ -545,12 +527,7 @@ async fn test_new_request_err_recvprofile() {
             assert_matches!(result.unwrap_err(), RunnerProtoError::EmptyProfile);
 
             let request_info = request_info.unwrap();
-            assert!(request_info
-                .path
-                .join("firefox")
-                .join("firefox.exe")
-                .is_file());
-            assert!(!request_info.path.join("profile").exists());
+            assert!(!request_info.path.exists());
         },
     )
     .await;
@@ -588,12 +565,7 @@ async fn test_new_request_err_restarting() {
             );
 
             let request_info = request_info.unwrap();
-            assert!(request_info
-                .path
-                .join("firefox")
-                .join("firefox.exe")
-                .is_file());
-            assert!(directory_is_empty(&request_info.path.join("profile")));
+            assert!(!request_info.path.exists());
         },
     )
     .await;

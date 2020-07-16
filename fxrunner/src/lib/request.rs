@@ -22,7 +22,6 @@ pub struct RequestInfo<'a> {
     pub id: Cow<'a, str>,
     pub path: PathBuf,
 }
-
 /// A trait for creating and validating requests.
 #[async_trait]
 pub trait RequestManager {
