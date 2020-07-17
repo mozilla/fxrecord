@@ -55,7 +55,7 @@ impl RecorderProto {
         let request_id = match self.recv::<NewRequestResponse>().await?.request_id {
             Ok(request_id) => request_id,
             Err(e) => {
-                error!(self.log, "runner could not handle new request"; "error" => ?e);
+                error!(self.log, "runner could not handle new request"; "error" => %e);
                 return Err(e.into());
             }
         };
@@ -78,7 +78,7 @@ impl RecorderProto {
                 }
 
                 Err(e) => {
-                    error!(self.log, "Build download failed"; "task_id" => task_id, "error" => ?e);
+                    error!(self.log, "Build download failed"; "task_id" => task_id, "error" => %e);
                     return Err(e.into());
                 }
             }
@@ -90,18 +90,18 @@ impl RecorderProto {
         } else {
             info!(self.log, "No profile to send");
             if let Err(e) = self.recv::<CreateProfile>().await?.result {
-                error!(self.log, "Runner could not create profile"; "error" => ?e);
+                error!(self.log, "Runner could not create profile"; "error" => %e);
                 return Err(e.into());
             }
         }
 
         if let WritePrefs { result: Err(e) } = self.recv().await? {
-            error!(self.log, "Runner could not write prefs"; "error" => ?e);
+            error!(self.log, "Runner could not write prefs"; "error" => %e);
             return Err(e.into());
         }
 
         if let Restarting { result: Err(e) } = self.recv().await? {
-            error!(self.log, "Runner could not restart"; "error" => ?e);
+            error!(self.log, "Runner could not restart"; "error" => %e);
             return Err(e.into());
         }
 
@@ -127,7 +127,7 @@ impl RecorderProto {
         .await?;
 
         if let ResumeResponse { result: Err(e) } = self.recv().await? {
-            error!(self.log, "Could not resume request with runner"; "error" => ?e);
+            error!(self.log, "Could not resume request with runner"; "error" => %e);
             return Err(e.into());
         }
 
@@ -135,7 +135,7 @@ impl RecorderProto {
             info!(self.log, "Waiting for runner to become idle...");
 
             if let WaitForIdle { result: Err(e) } = self.recv().await? {
-                error!(self.log, "Runner could not become idle"; "error" => ?e);
+                error!(self.log, "Runner could not become idle"; "error" => %e);
                 return Err(e.into());
             }
 

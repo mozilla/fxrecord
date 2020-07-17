@@ -159,7 +159,7 @@ where
             .shutdown_handler
             .initiate_restart("fxrunner: restarting for cold Firefox start")
         {
-            error!(self.log, "Could not restart"; "error" => ?e);
+            error!(self.log, "Could not restart"; "error" => %e);
             self.send(Restarting {
                 result: Err(e.into_error_message()),
             })
@@ -236,7 +236,7 @@ where
         {
             Ok(download_path) => download_path,
             Err(e) => {
-                error!(self.log, "Could not download build"; "error" => ?e);
+                error!(self.log, "Could not download build"; "error" => %e);
                 self.send(DownloadBuild {
                     result: Err(e.into_error_message()),
                 })
@@ -337,7 +337,7 @@ where
         let stats = match unzip_result {
             Ok(stats) => stats,
             Err(e) => {
-                error!(self.log, "Could not extract profile"; "error" => ?e);
+                error!(self.log, "Could not extract profile"; "error" => %e);
 
                 self.send(RecvProfile {
                     result: Err(e.into_error_message()),
@@ -362,7 +362,7 @@ where
         let unzipped_profile_dir = stats.top_level_dir.unwrap_or(unzip_path);
         let profile_dir = request_info.path.join("profile");
         if let Err(e) = rename(unzipped_profile_dir, &profile_dir).await {
-            error!(self.log, "Could not rename profile directory after extraction"; "error" => ?e);
+            error!(self.log, "Could not rename profile directory after extraction"; "error" => %e);
 
             self.send(RecvProfile {
                 result: Err(e.into_error_message()),

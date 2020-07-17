@@ -97,7 +97,7 @@ async fn fxrecorder(log: Logger, options: Options, config: Config) -> Result<(),
                 error!(
                     log,
                     "Could not connect to runner";
-                    "last_error" => ?e.source().unwrap()
+                    "last_error" => %e.source().unwrap()
                 );
                 e
             })?;

@@ -68,7 +68,7 @@ async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), B
             log,
             "Could not create requests directory";
             "requests_dir" => config.requests_dir.display(),
-            "error" => ?e,
+            "error" => %e,
         );
 
         return Err(e.into());
@@ -100,7 +100,7 @@ async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), B
                     }
                 }
                 Err(e) => {
-                    error!(log, "Encountered an unexpected error while serving a request"; "error" => ?e);
+                    error!(log, "Encountered an unexpected error while serving a request"; "error" => %e);
                 }
             }
 
@@ -110,7 +110,7 @@ async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), B
             // only expect a single pending request at a time, so the request
             // directory *should* be empty. If it isn't, then isn't empty it.
             if let Err(e) = cleanup_requests_dir(log.clone(), &config.requests_dir).await {
-                error!(log, "Could not cleanup requests directory"; "error" => ?e);
+                error!(log, "Could not cleanup requests directory"; "error" => %e);
             }
         }
 
