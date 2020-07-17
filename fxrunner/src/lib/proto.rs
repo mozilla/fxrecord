@@ -18,7 +18,9 @@ use tokio::task::spawn_blocking;
 
 use crate::fs::PathExt;
 use crate::osapi::{cpu_and_disk_idle, PerfProvider, ShutdownProvider, WaitForIdleError};
-use crate::request::{NewRequestError, RequestInfo, RequestManager, ResumeRequestError};
+use crate::request::{
+    cleanup_request, NewRequestError, RequestInfo, RequestManager, ResumeRequestError,
+};
 use crate::taskcluster::Taskcluster;
 use crate::zip::{unzip, ZipError};
 
@@ -85,14 +87,7 @@ where
             }
         };
 
-        let cleanup = guard(
-            (request_info.clone(), self.log.clone()),
-            |(request_info, log)| {
-                if let Err(e) = std::fs::remove_dir_all(&request_info.path) {
-                    error!(log, "Could not cleanup request"; "request_id" => %request_info.id, "error" => ?e);
-                }
-            },
-        );
+        let cleanup = guard(self.log.clone(), |log| cleanup_request(log, &request_info));
 
         self.send(NewRequestResponse {
             request_id: Ok(request_info.id.clone().into_owned()),
@@ -187,13 +182,18 @@ where
     ) -> Result<(), RunnerProtoError<S, T, P>> {
         info!(self.log, "Received resumption request");
 
-        if let Err(e) = self.request_manager.resume_request(&request.id).await {
-            self.send(ResumeResponse {
-                result: Err(e.into_error_message()),
-            })
-            .await?;
-            return Err(e.into());
-        }
+        let request_info = match self.request_manager.resume_request(&request.id).await {
+            Ok(request_info) => request_info,
+            Err(e) => {
+                self.send(ResumeResponse {
+                    result: Err(e.into_error_message()),
+                })
+                .await?;
+                return Err(e.into());
+            }
+        };
+
+        let _cleanup = guard(self.log.clone(), |log| cleanup_request(log, &request_info));
 
         self.send(ResumeResponse { result: Ok(()) }).await?;
 

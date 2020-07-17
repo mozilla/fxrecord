@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 use async_trait::async_trait;
 use rand::distributions::Alphanumeric;
 use rand::prelude::*;
+use scopeguard::{guard, ScopeGuard};
+use slog::error;
 use thiserror::Error;
 use tokio::fs::create_dir;
 
@@ -46,12 +48,16 @@ pub trait RequestManager {
 }
 
 pub struct FsRequestManager {
+    log: slog::Logger,
     path: PathBuf,
 }
 
 impl FsRequestManager {
-    pub fn new(path: &Path) -> Self {
-        FsRequestManager { path: path.into() }
+    pub fn new(log: slog::Logger, path: &Path) -> Self {
+        FsRequestManager {
+            log,
+            path: path.into(),
+        }
     }
 }
 
@@ -119,14 +125,21 @@ impl RequestManager for FsRequestManager {
             });
         }
 
-        if !path.join("profile").is_dir_async().await {
+        let request_info = RequestInfo {
+            path,
+            id: Cow::Borrowed(request_id),
+        };
+
+        let cleanup = guard(self.log.clone(), |log| cleanup_request(log, &request_info));
+
+        if !request_info.path.join("profile").is_dir_async().await {
             return Err(ResumeRequestError {
                 kind: ResumeRequestErrorKind::MissingProfile,
                 request_id: request_id.into(),
             });
         }
 
-        let firefox_path = path.join("firefox");
+        let firefox_path = request_info.path.join("firefox");
         let bin_path = firefox_path.join("firefox.exe");
         if !firefox_path.is_dir_async().await || !bin_path.is_file_async().await {
             return Err(ResumeRequestError {
@@ -135,10 +148,8 @@ impl RequestManager for FsRequestManager {
             });
         }
 
-        Ok(RequestInfo {
-            path,
-            id: Cow::Borrowed(request_id),
-        })
+        drop(ScopeGuard::into_inner(cleanup));
+        Ok(request_info)
     }
 
     async fn ensure_valid_profile_dir<'a>(
@@ -185,4 +196,19 @@ pub enum NewRequestError {
 /// Validate the given request ID is of the proper form.
 fn validate_request_id(request_id: &str) -> bool {
     request_id.len() == REQUEST_ID_LEN && request_id.chars().all(|c| c.is_ascii_alphanumeric())
+}
+
+/// Synchronously cleanup a request given by the request info.
+pub fn cleanup_request(log: slog::Logger, request_info: &RequestInfo<'_>) {
+    // This must be performed synchronously because there is no async version of
+    // the drop trait.
+    //
+    // A future could be spawned that would trigger when the guard goes out of
+    // scope, but we cannot `await` its completion.
+    //
+    // Having a synchronous operation in the failure case seems like an okay
+    // compromise.
+    if let Err(e) = std::fs::remove_dir_all(&request_info.path) {
+        error!(log, "Could not cleanup request"; "request_id" => %request_info.id, "error" => %e);
+    }
 }

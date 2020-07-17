@@ -88,7 +88,7 @@ async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), B
                 shutdown_provider(&options),
                 FirefoxCi::default(),
                 WindowsPerfProvider::default(),
-                FsRequestManager::new(&config.requests_dir),
+                FsRequestManager::new(log.clone(), &config.requests_dir),
             )
             .await?
             {
