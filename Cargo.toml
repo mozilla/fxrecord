@@ -3,5 +3,6 @@ members = [
     "fxrecorder",
     "fxrunner",
     "libfxrecord",
+    "libfxrecord_macros",
     "integration-tests",
 ]

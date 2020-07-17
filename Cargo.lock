@@ -730,6 +730,7 @@ dependencies = [
  "derive_more",
  "futures",
  "indoc",
+ "libfxrecord_macros",
  "serde",
  "serde_json",
  "slog",
@@ -741,6 +742,18 @@ dependencies = [
  "tokio-serde",
  "tokio-util",
  "toml",
+]
+
+[[package]]
+name = "libfxrecord_macros"
+version = "0.1.0"
+dependencies = [
+ "derive_more",
+ "libfxrecord",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "syn",
 ]
 
 [[package]]
@@ -1360,9 +1373,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "1.0.31"
+version = "1.0.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5304cfdf27365b7585c25d4af91b35016ed21ef88f17ced89c7093b43dba8b6"
+checksum = "936cae2873c940d92e697597c5eee105fb570cd5689c695806f672883653349b"
 dependencies = [
  "proc-macro2",
  "quote",

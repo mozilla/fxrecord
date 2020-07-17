@@ -1,0 +1,19 @@
+[package]
+name = "libfxrecord_macros"
+version = "0.1.0"
+authors = ["Barret Rennie <barret@brennie.ca>"]
+edition = "2018"
+license = "MPL-2.0"
+
+[lib]
+proc_macro = true
+
+[dependencies]
+proc-macro2 = "1.0.18"
+quote = "1.0.7"
+syn = { version = "1.0.34", features = ["full"] }
+
+[dev-dependencies]
+derive_more = "0.99.7"
+libfxrecord = { path = "../libfxrecord" }
+serde = { version = "1.0.110", features = ["derive"] }
