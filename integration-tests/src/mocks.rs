@@ -11,8 +11,8 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use libfxrecord::error::ErrorMessage;
 use libfxrunner::osapi::{IoCounters, PerfProvider, ShutdownProvider};
-use libfxrunner::request::{
-    NewRequestError, RequestInfo, RequestManager, ResumeRequestError, ResumeRequestErrorKind,
+use libfxrunner::session::{
+    NewSessionError, ResumeSessionError, ResumeSessionErrorKind, SessionInfo, SessionManager,
 };
 use libfxrunner::taskcluster::Taskcluster;
 use tempfile::TempDir;
@@ -20,8 +20,8 @@ use tokio::fs;
 
 use crate::util::{test_dir, touch, AssertInvoked};
 
-/// The only valid request ID for TestRequestManager.
-pub const VALID_REQUEST_ID: &str = "REQUESTID";
+/// The only valid session ID for TestSessionManager.
+pub const VALID_SESSION_ID: &str = "REQUESTID";
 
 #[derive(Debug, Default)]
 pub struct TestShutdownProvider {
@@ -185,155 +185,155 @@ impl PerfProvider for TestPerfProvider {
 }
 
 #[derive(Debug)]
-pub enum RequestFailureMode {
-    NewRequest(NewRequestError),
-    ResumeRequest(ResumeRequestErrorKind),
+pub enum SessionFailureMode {
+    NewSession(NewSessionError),
+    ResumeSession(ResumeSessionErrorKind),
     EnsureProfileDir(&'static str),
 }
 
-/// A handle to the internals of a TestRequestManager.
+/// A handle to the internals of a TestSessionManager.
 ///
-/// The `TempDir` for the [`TestRequestManager`][TestRequestManager] exists
+/// The `TempDir` for the [`TestSessionManager`][TestSessionManager] exists
 /// inside the handle becuase we need to extend its lifetime to the end of the
 /// runner closure passed to `run_proto_test`. By the time that closure is
 /// executed, `RunnerProto::handle_request` has already completed and
-/// therefore consumed the `TestRequestManager`. In order to inspect the result
+/// therefore consumed the `TestSessionManager`. In order to inspect the result
 /// of the request, we need to keep the directory around.
 ///
-/// [TestRequestManager]: struct.TestRequestManager.html.
-pub struct TestRequestManagerHandle {
+/// [TestSessionManager]: struct.TestSessionManager.html.
+pub struct TestSessionManagerHandle {
     tempdir: TempDir,
-    last_request_info: Mutex<Option<RequestInfo<'static>>>,
+    last_session_info: Mutex<Option<SessionInfo<'static>>>,
 }
 
-pub struct TestRequestManager {
-    failure_mode: Option<RequestFailureMode>,
+pub struct TestSessionManager {
+    failure_mode: Option<SessionFailureMode>,
 
-    // Internal details of the request manager that need to be kept alive after
-    // the `TestRequestMangaer` is consumed.
-    handle: Arc<TestRequestManagerHandle>,
+    // Internal details of the session manager that need to be kept alive after
+    // the `TestSessionMangaer` is consumed.
+    handle: Arc<TestSessionManagerHandle>,
 }
 
-impl TestRequestManagerHandle {
-    pub fn last_request_info(&self) -> Option<RequestInfo<'static>> {
-        self.last_request_info.lock().unwrap().take()
+impl TestSessionManagerHandle {
+    pub fn last_session_info(&self) -> Option<SessionInfo<'static>> {
+        self.last_session_info.lock().unwrap().take()
     }
 }
 
-impl Default for TestRequestManager {
+impl Default for TestSessionManager {
     fn default() -> Self {
-        let tempdir = TempDir::new().expect("could not create tempdir for TestRequestManager");
+        let tempdir = TempDir::new().expect("could not create tempdir for TestSessionManager");
         Self {
             failure_mode: None,
-            handle: Arc::new(TestRequestManagerHandle {
+            handle: Arc::new(TestSessionManagerHandle {
                 tempdir,
-                last_request_info: Mutex::new(None),
+                last_session_info: Mutex::new(None),
             }),
         }
     }
 }
 
-impl TestRequestManager {
-    pub fn with_failure(failure_mode: RequestFailureMode) -> Self {
+impl TestSessionManager {
+    pub fn with_failure(failure_mode: SessionFailureMode) -> Self {
         let mut manager = Self::default();
         manager.failure_mode = Some(failure_mode);
         manager
     }
 
-    pub fn handle(&self) -> Arc<TestRequestManagerHandle> {
+    pub fn handle(&self) -> Arc<TestSessionManagerHandle> {
         self.handle.clone()
     }
 }
 
 #[async_trait]
-impl RequestManager for TestRequestManager {
-    async fn new_request(&self) -> Result<RequestInfo<'static>, NewRequestError> {
+impl SessionManager for TestSessionManager {
+    async fn new_session(&self) -> Result<SessionInfo<'static>, NewSessionError> {
         match self.failure_mode {
-            Some(RequestFailureMode::NewRequest(ref err)) => Err(clone_new_request_err(err)),
+            Some(SessionFailureMode::NewSession(ref err)) => Err(clone_new_session_err(err)),
             _ => {
-                let request_info = RequestInfo {
-                    id: Cow::Borrowed(VALID_REQUEST_ID),
-                    path: self.handle.tempdir.path().join("request"),
+                let session_info = SessionInfo {
+                    id: Cow::Borrowed(VALID_SESSION_ID),
+                    path: self.handle.tempdir.path().join("session"),
                 };
 
-                fs::create_dir(&request_info.path).await.unwrap();
+                fs::create_dir(&session_info.path).await.unwrap();
 
-                *self.handle.last_request_info.lock().unwrap() = Some(request_info.clone());
-                Ok(request_info)
+                *self.handle.last_session_info.lock().unwrap() = Some(session_info.clone());
+                Ok(session_info)
             }
         }
     }
 
-    async fn resume_request<'a>(
+    async fn resume_session<'a>(
         &self,
-        request_id: &'a str,
-    ) -> Result<RequestInfo<'a>, ResumeRequestError> {
-        if let Some(RequestFailureMode::ResumeRequest(ref kind)) = self.failure_mode {
-            return Err(ResumeRequestError {
-                request_id: request_id.into(),
+        session_id: &'a str,
+    ) -> Result<SessionInfo<'a>, ResumeSessionError> {
+        if let Some(SessionFailureMode::ResumeSession(ref kind)) = self.failure_mode {
+            return Err(ResumeSessionError {
+                session_id: session_id.into(),
                 kind: kind.clone(),
             });
-        } else if request_id != VALID_REQUEST_ID {
-            return Err(ResumeRequestError {
-                request_id: request_id.into(),
-                kind: ResumeRequestErrorKind::InvalidId,
+        } else if session_id != VALID_SESSION_ID {
+            return Err(ResumeSessionError {
+                session_id: session_id.into(),
+                kind: ResumeSessionErrorKind::InvalidId,
             });
         }
 
-        let request_info = RequestInfo {
-            id: Cow::Borrowed(VALID_REQUEST_ID),
-            path: self.handle.tempdir.path().join("request"),
+        let session_info = SessionInfo {
+            id: Cow::Borrowed(VALID_SESSION_ID),
+            path: self.handle.tempdir.path().join("session"),
         };
 
-        fs::create_dir(&request_info.path).await.unwrap();
-        fs::create_dir(&request_info.path.join("profile"))
+        fs::create_dir(&session_info.path).await.unwrap();
+        fs::create_dir(&session_info.path.join("profile"))
             .await
             .unwrap();
-        fs::create_dir(&request_info.path.join("firefox"))
+        fs::create_dir(&session_info.path.join("firefox"))
             .await
             .unwrap();
-        touch(&request_info.path.join("firefox").join("firefox.exe"))
+        touch(&session_info.path.join("firefox").join("firefox.exe"))
             .await
             .unwrap();
 
-        *self.handle.last_request_info.lock().unwrap() = Some(request_info.clone());
-        Ok(request_info)
+        *self.handle.last_session_info.lock().unwrap() = Some(session_info.clone());
+        Ok(session_info)
     }
 
     async fn ensure_valid_profile_dir<'a>(
         &self,
-        request_info: &RequestInfo<'a>,
+        session_info: &SessionInfo<'a>,
     ) -> Result<PathBuf, io::Error> {
-        assert_eq!(request_info.id, VALID_REQUEST_ID);
+        assert_eq!(session_info.id, VALID_SESSION_ID);
 
-        if let Some(RequestFailureMode::EnsureProfileDir(msg)) = self.failure_mode {
+        if let Some(SessionFailureMode::EnsureProfileDir(msg)) = self.failure_mode {
             return Err(io::Error::new(io::ErrorKind::Other, msg));
         }
 
         {
             // We scope this to intentionally drop the lock guard before the
             // await because the inner type is not Send.
-            let info = self.handle.last_request_info.lock().unwrap();
+            let info = self.handle.last_session_info.lock().unwrap();
             assert!(info.is_some());
-            assert_eq!(info.as_ref().unwrap().id, request_info.id);
-            assert_eq!(info.as_ref().unwrap().path, request_info.path);
+            assert_eq!(info.as_ref().unwrap().id, session_info.id);
+            assert_eq!(info.as_ref().unwrap().path, session_info.path);
         };
 
-        let profile_path = request_info.path.join("profile");
+        let profile_path = session_info.path.join("profile");
 
         fs::create_dir(&profile_path).await.unwrap();
         Ok(profile_path)
     }
 }
 
-fn clone_new_request_err(err: &NewRequestError) -> NewRequestError {
+fn clone_new_session_err(err: &NewSessionError) -> NewSessionError {
     match err {
-        NewRequestError::TooManyAttempts(a) => NewRequestError::TooManyAttempts(*a),
-        NewRequestError::Io(inner) => {
+        NewSessionError::TooManyAttempts(a) => NewSessionError::TooManyAttempts(*a),
+        NewSessionError::Io(inner) => {
             // io::Error does not impl Clone, so we do a *good enough* clone. In
             // practice, since we are only going to be testing this with custom
             // IO errors, this is effectively a clone implementation.
-            NewRequestError::Io(io::Error::new(inner.kind(), err.to_string()))
+            NewSessionError::Io(io::Error::new(inner.kind(), err.to_string()))
         }
     }
 }

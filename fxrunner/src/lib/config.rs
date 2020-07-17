@@ -13,6 +13,6 @@ pub struct Config {
     /// The address and port to listen on.
     pub host: SocketAddr,
 
-    /// The directory to store request state in.
-    pub requests_dir: PathBuf,
+    /// The directory to store session state in.
+    pub session_dir: PathBuf,
 }

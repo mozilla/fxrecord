@@ -55,34 +55,15 @@ pub struct KindMismatch<K: Debug + Display> {
     pub actual: K,
 }
 
-/// A request from the recorder to the runner.
-#[derive(Debug, Deserialize, Serialize)]
-pub enum RecorderRequest {
-    /// A new request.
-    ///
-    /// If successful, the runner will restart and the recorder should send a
-    /// [`ResumeRequest`](enum.RecorderRequest.html#variant.ResumeRequest)
-    /// upon reconnection.
-    NewRequest(NewRequest),
-
-    /// A request to resume a [previous
-    /// request](enum.RecorderRequest.html#variant.NewRequest).
-    ResumeRequest(ResumeRequest),
-}
-
-impl From<NewRequest> for Request {
-    fn from(req: NewRequest) -> Request {
-        Request {
-            request: RecorderRequest::NewRequest(req),
-        }
+impl From<NewSessionRequest> for Session {
+    fn from(req: NewSessionRequest) -> Session {
+        Session::NewSession(req)
     }
 }
 
-impl From<ResumeRequest> for Request {
-    fn from(req: ResumeRequest) -> Request {
-        Request {
-            request: RecorderRequest::ResumeRequest(req),
-        }
+impl From<ResumeSessionRequest> for Session {
+    fn from(req: ResumeSessionRequest) -> Session {
+        Session::ResumeSession(req)
     }
 }
 
@@ -96,8 +77,9 @@ pub enum Idle {
     Skip,
 }
 
+/// A request for a new session.
 #[derive(Debug, Deserialize, Serialize)]
-pub struct NewRequest {
+pub struct NewSessionRequest {
     /// The task ID of the Taskcluster build task.
     ///
     /// The build artifact from this task will be downloaded by the runner.
@@ -110,10 +92,11 @@ pub struct NewRequest {
     pub prefs: Vec<(String, PrefValue)>,
 }
 
+/// A request to resume an existing session.
 #[derive(Debug, Deserialize, Serialize)]
-pub struct ResumeRequest {
-    /// The ID of the request being resumed.
-    pub id: String,
+pub struct ResumeSessionRequest {
+    /// The ID of the session being resumed.
+    pub session_id: String,
 
     /// Whether or not the runner should wait for idle before running Firefox.
     pub idle: Idle,
@@ -147,8 +130,17 @@ message_type! {
     RecorderMessageKind;
 
     /// A request from the recorder to the runner.
-    pub struct Request {
-        pub request: RecorderRequest,
+    pub enum Session {
+        /// A request for a new session.
+        ///
+        /// If successful, the runner will restart and the recorder should send a
+        /// [`ResumeSession`](enum.RecorderSession.html#variant.ResumeSession)
+        /// upon reconnection.
+        NewSession(NewSessionRequest),
+
+        /// A request to resume a [previous
+        /// request](enum.RecorderSession.html#variant.NewSession).
+        ResumeSession(ResumeSessionRequest),
     }
 }
 
@@ -184,10 +176,11 @@ message_type! {
         pub result: ForeignResult<()>,
     }
 
-    /// The status of the NewRequest phase.
-    pub struct NewRequestResponse {
-        /// The request ID to be given in a `ResumeRequest`.
-        pub request_id: ForeignResult<String>,
+    /// The status of the NewSession phase.
+    pub struct NewSessionResponse {
+        /// The session ID to be given in a
+        /// [`ResumeSession`](enum.Session.html#variant.ResumeSession) message.
+        pub session_id: ForeignResult<String>,
     }
 
     /// The status of the ResumeResponse phase.

@@ -18,8 +18,8 @@ use tokio::task::spawn_blocking;
 
 use crate::fs::PathExt;
 use crate::osapi::{cpu_and_disk_idle, PerfProvider, ShutdownProvider, WaitForIdleError};
-use crate::request::{
-    cleanup_request, NewRequestError, RequestInfo, RequestManager, ResumeRequestError,
+use crate::session::{
+    cleanup_session, NewSessionError, ResumeSessionError, SessionInfo, SessionManager,
 };
 use crate::taskcluster::Taskcluster;
 use crate::zip::{unzip, ZipError};
@@ -31,7 +31,7 @@ pub struct RunnerProto<S, T, P, R> {
     shutdown_handler: S,
     tc: T,
     perf_provider: P,
-    request_manager: R,
+    session_manager: R,
 }
 
 impl<S, T, P, R> RunnerProto<S, T, P, R>
@@ -39,7 +39,7 @@ where
     S: ShutdownProvider,
     T: Taskcluster,
     P: PerfProvider + 'static,
-    R: RequestManager,
+    R: SessionManager,
 {
     /// Handle a request from the recorder.
     pub async fn handle_request(
@@ -48,7 +48,7 @@ where
         shutdown_handler: S,
         tc: T,
         perf_provider: P,
-        request_manager: R,
+        session_manager: R,
     ) -> Result<bool, RunnerProtoError<S, T, P>> {
         let mut proto = Self {
             inner: Some(Proto::new(stream)),
@@ -56,57 +56,58 @@ where
             shutdown_handler,
             tc,
             perf_provider,
-            request_manager,
+            session_manager,
         };
 
-        match proto.recv::<Request>().await?.request {
-            RecorderRequest::NewRequest(req) => {
-                proto.handle_new_request(req).await?;
+        match proto.recv::<Session>().await? {
+            Session::NewSession(req) => {
+                proto.handle_new_session(req).await?;
                 Ok(true)
             }
 
-            RecorderRequest::ResumeRequest(req) => {
-                proto.handle_resume_request(req).await?;
+            Session::ResumeSession(req) => {
+                proto.handle_resume_session(req).await?;
                 Ok(false)
             }
         }
     }
-    /// Handle a new request from the recorder.
-    async fn handle_new_request(
+
+    /// Handle a request for a new session from the recorder.
+    async fn handle_new_session(
         &mut self,
-        request: NewRequest,
+        request: NewSessionRequest,
     ) -> Result<(), RunnerProtoError<S, T, P>> {
-        let request_info = match self.request_manager.new_request().await {
-            Ok(request_info) => request_info,
+        let session_info = match self.session_manager.new_session().await {
+            Ok(session_info) => session_info,
             Err(e) => {
-                self.send(NewRequestResponse {
-                    request_id: Err(e.into_error_message()),
+                self.send(NewSessionResponse {
+                    session_id: Err(e.into_error_message()),
                 })
                 .await?;
                 return Err(e.into());
             }
         };
 
-        let cleanup = guard(self.log.clone(), |log| cleanup_request(log, &request_info));
+        let cleanup = guard(self.log.clone(), |log| cleanup_session(log, &session_info));
 
-        self.send(NewRequestResponse {
-            request_id: Ok(request_info.id.clone().into_owned()),
+        self.send(NewSessionResponse {
+            session_id: Ok(session_info.id.clone().into_owned()),
         })
         .await?;
 
         let firefox_bin = self
-            .download_build(&request_info, &request.build_task_id)
+            .download_build(&session_info, &request.build_task_id)
             .await?;
         assert!(firefox_bin.is_file_async().await);
 
         let profile_path = match request.profile_size {
-            Some(profile_size) => self.recv_profile(&request_info, profile_size).await?,
+            Some(profile_size) => self.recv_profile(&session_info, profile_size).await?,
             None => {
                 info!(self.log, "Creating new empty profile");
 
                 let profile_path = match self
-                    .request_manager
-                    .ensure_valid_profile_dir(&request_info)
+                    .session_manager
+                    .ensure_valid_profile_dir(&session_info)
                     .await
                 {
                     Ok(profile_path) => profile_path,
@@ -175,15 +176,19 @@ where
         Ok(())
     }
 
-    /// Handle a resume request from the runner.
-    async fn handle_resume_request(
+    /// Resume a session from the recorder.
+    async fn handle_resume_session(
         &mut self,
-        request: ResumeRequest,
+        request: ResumeSessionRequest,
     ) -> Result<(), RunnerProtoError<S, T, P>> {
         info!(self.log, "Received resumption request");
 
-        let request_info = match self.request_manager.resume_request(&request.id).await {
-            Ok(request_info) => request_info,
+        let session_info = match self
+            .session_manager
+            .resume_session(&request.session_id)
+            .await
+        {
+            Ok(session_info) => session_info,
             Err(e) => {
                 self.send(ResumeResponse {
                     result: Err(e.into_error_message()),
@@ -193,7 +198,7 @@ where
             }
         };
 
-        let _cleanup = guard(self.log.clone(), |log| cleanup_request(log, &request_info));
+        let _cleanup = guard(self.log.clone(), |log| cleanup_session(log, &session_info));
 
         self.send(ResumeResponse { result: Ok(()) }).await?;
 
@@ -220,7 +225,7 @@ where
     /// Download a build from taskcluster.
     async fn download_build<'a>(
         &mut self,
-        request_info: &'a RequestInfo<'a>,
+        session_info: &'a SessionInfo<'a>,
         task_id: &str,
     ) -> Result<PathBuf, RunnerProtoError<S, T, P>> {
         info!(self.log, "Download build from Taskcluster"; "task_id" => &task_id);
@@ -231,7 +236,7 @@ where
 
         let download_path = match self
             .tc
-            .download_build_artifact(task_id, &request_info.path)
+            .download_build_artifact(task_id, &session_info.path)
             .await
         {
             Ok(download_path) => download_path,
@@ -252,7 +257,7 @@ where
         info!(self.log, "Extracting downloaded artifact...");
 
         let unzip_result = spawn_blocking({
-            let download_dir = PathBuf::from(&request_info.path);
+            let download_dir = PathBuf::from(&session_info.path);
             move || unzip(&download_path, &download_dir)
         })
         .await
@@ -266,7 +271,7 @@ where
             return Err(e.into());
         }
 
-        let firefox_path = request_info.path.join("firefox").join("firefox.exe");
+        let firefox_path = session_info.path.join("firefox").join("firefox.exe");
         if !firefox_path.is_file_async().await {
             let err = RunnerProtoError::MissingFirefox;
 
@@ -289,7 +294,7 @@ where
     /// Receive a profile from the recorder.
     async fn recv_profile(
         &mut self,
-        request_info: &RequestInfo<'_>,
+        session_info: &SessionInfo<'_>,
         profile_size: u64,
     ) -> Result<PathBuf, RunnerProtoError<S, T, P>> {
         info!(self.log, "Receiving profile...");
@@ -299,7 +304,7 @@ where
         .await?;
 
         let mut stream = self.inner.take().unwrap().into_inner();
-        let result = Self::recv_profile_raw(&mut stream, &request_info.path, profile_size).await;
+        let result = Self::recv_profile_raw(&mut stream, &session_info.path, profile_size).await;
         self.inner = Some(Proto::new(stream));
 
         let zip_path = match result {
@@ -324,7 +329,7 @@ where
         // `request_info.path.join("profile")`. Instead, we unzip it to a
         // temporary directory and then move the top level directory (which may
         // be the path we extracted it to) to the target profile directory.
-        let unzip_path = request_info.path.join("unzipped_profile");
+        let unzip_path = session_info.path.join("unzipped_profile");
 
         let unzip_result = spawn_blocking({
             let zip_path = zip_path.clone();
@@ -360,7 +365,7 @@ where
         }
 
         let unzipped_profile_dir = stats.top_level_dir.unwrap_or(unzip_path);
-        let profile_dir = request_info.path.join("profile");
+        let profile_dir = session_info.path.join("profile");
         if let Err(e) = rename(unzipped_profile_dir, &profile_dir).await {
             error!(self.log, "Could not rename profile directory after extraction"; "error" => %e);
 
@@ -446,10 +451,10 @@ where
     Zip(#[from] ZipError),
 
     #[error(transparent)]
-    NewRequest(#[from] NewRequestError),
+    NewSession(#[from] NewSessionError),
 
     #[error(transparent)]
-    ResumeRequest(#[from] ResumeRequestError),
+    ResumeSession(#[from] ResumeSessionError),
 
     #[error(transparent)]
     EnsureProfile(io::Error),

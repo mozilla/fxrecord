@@ -6,6 +6,6 @@ pub mod config;
 pub mod fs;
 pub mod osapi;
 pub mod proto;
-pub mod request;
+pub mod session;
 pub mod taskcluster;
 pub mod zip;

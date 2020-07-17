@@ -71,14 +71,14 @@ async fn fxrecorder(log: Logger, options: Options, config: Config) -> Result<(),
         }
     }
 
-    let request_id = {
+    let session_id = {
         let stream = TcpStream::connect(&config.host).await?;
         info!(log, "Connected"; "peer" => config.host);
 
         let mut proto = RecorderProto::new(log.clone(), stream);
 
         proto
-            .send_new_request(&task_id, profile_path.as_deref(), prefs)
+            .new_session(&task_id, profile_path.as_deref(), prefs)
             .await?
     };
 
@@ -111,7 +111,7 @@ async fn fxrecorder(log: Logger, options: Options, config: Config) -> Result<(),
         } else {
             Idle::Wait
         };
-        proto.send_resume_request(&request_id, idle).await?;
+        proto.resume_session(&session_id, idle).await?;
     }
 
     Ok(())

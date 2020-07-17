@@ -15,8 +15,8 @@ use libfxrecord::net::*;
 use libfxrecorder::proto::{RecorderProto, RecorderProtoError};
 use libfxrunner::osapi::WaitForIdleError;
 use libfxrunner::proto::{RunnerProto, RunnerProtoError};
-use libfxrunner::request::{
-    NewRequestError, RequestInfo, ResumeRequestError, ResumeRequestErrorKind,
+use libfxrunner::session::{
+    NewSessionError, ResumeSessionError, ResumeSessionErrorKind, SessionInfo,
 };
 use libfxrunner::zip::ZipError;
 use serde_json::Value;
@@ -34,13 +34,13 @@ fn test_logger() -> Logger {
 }
 
 type TestRunnerProto =
-    RunnerProto<TestShutdownProvider, TestTaskcluster, TestPerfProvider, TestRequestManager>;
+    RunnerProto<TestShutdownProvider, TestTaskcluster, TestPerfProvider, TestSessionManager>;
 type TestRunnerProtoError =
     RunnerProtoError<TestShutdownProvider, TestTaskcluster, TestPerfProvider>;
 
 struct RunnerInfo {
     result: Result<bool, TestRunnerProtoError>,
-    request_info: Option<RequestInfo<'static>>,
+    session_info: Option<SessionInfo<'static>>,
 }
 
 /// Run a test with both the recorder and runner protocols.
@@ -49,7 +49,7 @@ async fn run_proto_test<'a, Fut>(
     shutdown_provider: TestShutdownProvider,
     tc: TestTaskcluster,
     perf_provider: TestPerfProvider,
-    request_manager: TestRequestManager,
+    session_manager: TestSessionManager,
     recorder_fn: impl FnOnce(RecorderProto) -> Fut,
     runner_fn: impl FnOnce(RunnerInfo),
 ) where
@@ -60,7 +60,7 @@ async fn run_proto_test<'a, Fut>(
     let runner = async {
         let (stream, _) = listener.accept().await.unwrap();
 
-        let handle = request_manager.handle();
+        let handle = session_manager.handle();
 
         let result = TestRunnerProto::handle_request(
             test_logger(),
@@ -68,13 +68,13 @@ async fn run_proto_test<'a, Fut>(
             shutdown_provider,
             tc,
             perf_provider,
-            request_manager,
+            session_manager,
         )
         .await;
 
         runner_fn(RunnerInfo {
             result,
-            request_info: handle.last_request_info(),
+            session_info: handle.last_session_info(),
         });
     };
 
@@ -89,7 +89,7 @@ async fn run_proto_test<'a, Fut>(
 }
 
 #[tokio::test]
-async fn test_new_request_ok() {
+async fn test_new_session_ok() {
     let mut listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
 
     run_proto_test(
@@ -97,30 +97,27 @@ async fn test_new_request_ok() {
         TestShutdownProvider::default(),
         TestTaskcluster::default(),
         TestPerfProvider::default(),
-        TestRequestManager::default(),
+        TestSessionManager::default(),
         |mut recorder| async move {
             assert_eq!(
-                recorder
-                    .send_new_request("task_id", None, vec![])
-                    .await
-                    .unwrap(),
-                VALID_REQUEST_ID
+                recorder.new_session("task_id", None, vec![]).await.unwrap(),
+                VALID_SESSION_ID
             );
         },
         |RunnerInfo {
              result,
-             request_info,
+             session_info,
          }| {
             assert_eq!(result.unwrap(), true);
 
-            let request_info = request_info.unwrap();
-            assert!(request_info
+            let session_info = session_info.unwrap();
+            assert!(session_info
                 .path
                 .join("firefox")
                 .join("firefox.exe")
                 .is_file());
 
-            let profile_dir = request_info.path.join("profile");
+            let profile_dir = session_info.path.join("profile");
             assert!(profile_dir.is_dir());
             assert!(directory_is_empty(&profile_dir));
         },
@@ -132,30 +129,30 @@ async fn test_new_request_ok() {
         TestShutdownProvider::default(),
         TestTaskcluster::default(),
         TestPerfProvider::default(),
-        TestRequestManager::default(),
+        TestSessionManager::default(),
         |mut recorder| async move {
             assert_eq!(
                 recorder
-                    .send_new_request("task_id", Some(&test_dir().join("profile.zip")), vec![])
+                    .new_session("task_id", Some(&test_dir().join("profile.zip")), vec![])
                     .await
                     .unwrap(),
-                VALID_REQUEST_ID
+                VALID_SESSION_ID
             );
         },
         |RunnerInfo {
              result,
-             request_info,
+             session_info,
          }| {
             assert_eq!(result.unwrap(), true);
 
-            let request_info = request_info.unwrap();
-            assert!(request_info
+            let session_info = session_info.unwrap();
+            assert!(session_info
                 .path
                 .join("firefox")
                 .join("firefox.exe")
                 .is_file());
 
-            let profile_dir = request_info.path.join("profile");
+            let profile_dir = session_info.path.join("profile");
             assert_populated_profile(&profile_dir);
             assert_file_contents_eq(&profile_dir.join("user.js"), "");
         },
@@ -167,10 +164,10 @@ async fn test_new_request_ok() {
         TestShutdownProvider::default(),
         TestTaskcluster::default(),
         TestPerfProvider::default(),
-        TestRequestManager::default(),
+        TestSessionManager::default(),
         |mut recorder| async move {
-            let request_id = recorder
-                .send_new_request(
+            let session_id = recorder
+                .new_session(
                     "task_id",
                     Some(&test_dir().join("profile.zip")),
                     vec![
@@ -185,22 +182,22 @@ async fn test_new_request_ok() {
                 .await
                 .unwrap();
 
-            assert_eq!(request_id, VALID_REQUEST_ID);
+            assert_eq!(session_id, VALID_SESSION_ID);
         },
         |RunnerInfo {
              result,
-             request_info,
+             session_info,
          }| {
             assert_eq!(result.unwrap(), true);
 
-            let request_info = request_info.unwrap();
-            assert!(request_info
+            let session_info = session_info.unwrap();
+            assert!(session_info
                 .path
                 .join("firefox")
                 .join("firefox.exe")
                 .is_file());
 
-            let profile_dir = request_info.path.join("profile");
+            let profile_dir = session_info.path.join("profile");
             assert_populated_profile(dbg!(&profile_dir));
             assert_file_contents_eq(
                 &profile_dir.join("user.js"),
@@ -220,10 +217,10 @@ async fn test_new_request_ok() {
         TestShutdownProvider::default(),
         TestTaskcluster::default(),
         TestPerfProvider::default(),
-        TestRequestManager::default(),
+        TestSessionManager::default(),
         |mut recorder| async move {
-            let request_id = recorder
-                .send_new_request(
+            let session_id = recorder
+                .new_session(
                     "task_id",
                     None,
                     vec![
@@ -238,22 +235,22 @@ async fn test_new_request_ok() {
                 .await
                 .unwrap();
 
-            assert_eq!(request_id, VALID_REQUEST_ID);
+            assert_eq!(session_id, VALID_SESSION_ID);
         },
         |RunnerInfo {
              result,
-             request_info,
+             session_info,
          }| {
             assert_eq!(result.unwrap(), true);
 
-            let request_info = request_info.unwrap();
-            assert!(request_info
+            let session_info = session_info.unwrap();
+            assert!(session_info
                 .path
                 .join("firefox")
                 .join("firefox.exe")
                 .is_file());
 
-            let profile_dir = request_info.path.join("profile");
+            let profile_dir = session_info.path.join("profile");
             assert_file_contents_eq(
                 &profile_dir.join("user.js"),
                 indoc!(
@@ -269,7 +266,7 @@ async fn test_new_request_ok() {
 }
 
 #[tokio::test]
-async fn test_new_request_err_request_manager() {
+async fn test_new_session_err_request_manager() {
     let mut listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
 
     run_proto_test(
@@ -277,12 +274,12 @@ async fn test_new_request_err_request_manager() {
         TestShutdownProvider::default(),
         TestTaskcluster::default(),
         TestPerfProvider::default(),
-        TestRequestManager::with_failure(RequestFailureMode::NewRequest(
-            NewRequestError::TooManyAttempts(32),
+        TestSessionManager::with_failure(SessionFailureMode::NewSession(
+            NewSessionError::TooManyAttempts(32),
         )),
         |mut recorder| async move {
             assert_matches!(
-                recorder.send_new_request("task_id", None, vec![]).await.unwrap_err(),
+                recorder.new_session("task_id", None, vec![]).await.unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
                     assert_eq!(
                         e.to_string(),
@@ -292,14 +289,14 @@ async fn test_new_request_err_request_manager() {
         },
         |RunnerInfo {
              result,
-             request_info,
+             session_info,
          }| {
             assert_matches!(
                 result.unwrap_err(),
-                RunnerProtoError::NewRequest(NewRequestError::TooManyAttempts(32))
+                RunnerProtoError::NewSession(NewSessionError::TooManyAttempts(32))
             );
 
-            assert!(request_info.is_none());
+            assert!(session_info.is_none());
         },
     )
     .await;
@@ -309,12 +306,12 @@ async fn test_new_request_err_request_manager() {
         TestShutdownProvider::default(),
         TestTaskcluster::default(),
         TestPerfProvider::default(),
-        TestRequestManager::with_failure(RequestFailureMode::EnsureProfileDir(
+        TestSessionManager::with_failure(SessionFailureMode::EnsureProfileDir(
             "could not ensure profile directory",
         )),
         |mut recorder| async move {
             assert_matches!(
-                recorder.send_new_request("task_id", None, vec![]).await.unwrap_err(),
+                recorder.new_session("task_id", None, vec![]).await.unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
                     assert_eq!(
                         e.to_string(),
@@ -324,7 +321,7 @@ async fn test_new_request_err_request_manager() {
         },
         |RunnerInfo {
              result,
-             request_info,
+             session_info,
          }| {
             assert_matches!(
                 result.unwrap_err(),
@@ -333,16 +330,16 @@ async fn test_new_request_err_request_manager() {
                 }
             );
 
-            let request_info = request_info.unwrap();
-            assert_eq!(request_info.id, VALID_REQUEST_ID);
-            assert!(!request_info.path.exists());
+            let session_info = session_info.unwrap();
+            assert_eq!(session_info.id, VALID_SESSION_ID);
+            assert!(!session_info.path.exists());
         },
     )
     .await;
 }
 
 #[tokio::test]
-async fn test_new_request_err_downloadbuild() {
+async fn test_new_session_err_downloadbuild() {
     let mut listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
 
     run_proto_test(
@@ -350,11 +347,11 @@ async fn test_new_request_err_downloadbuild() {
         TestShutdownProvider::default(),
         TestTaskcluster::with_failure(TaskclusterFailureMode::BadZip),
         TestPerfProvider::default(),
-        TestRequestManager::default(),
+        TestSessionManager::default(),
         |mut recorder| async move {
             assert_matches!(
                 recorder
-                    .send_new_request("task_id", None, vec![])
+                    .new_session("task_id", None, vec![])
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -364,14 +361,14 @@ async fn test_new_request_err_downloadbuild() {
         },
         |RunnerInfo {
              result,
-             request_info,
+             session_info,
          }| {
             assert_matches!(result.unwrap_err(), RunnerProtoError::MissingFirefox);
 
-            let request_info = request_info.unwrap();
-            assert_eq!(request_info.id, VALID_REQUEST_ID);
+            let session_info = session_info.unwrap();
+            assert_eq!(session_info.id, VALID_SESSION_ID);
 
-            assert!(!request_info.path.exists());
+            assert!(!session_info.path.exists());
         },
     )
     .await;
@@ -381,11 +378,11 @@ async fn test_new_request_err_downloadbuild() {
         TestShutdownProvider::default(),
         TestTaskcluster::with_failure(TaskclusterFailureMode::Generic("404 Not Found")),
         TestPerfProvider::default(),
-        TestRequestManager::default(),
+        TestSessionManager::default(),
         |mut recorder| async move {
             assert_matches!(
                 recorder
-                    .send_new_request("task_id", None, vec![])
+                    .new_session("task_id", None, vec![])
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -395,7 +392,7 @@ async fn test_new_request_err_downloadbuild() {
         },
         |RunnerInfo {
              result,
-             request_info,
+             session_info,
          }| {
             assert_matches!(
                 result.unwrap_err(),
@@ -404,9 +401,9 @@ async fn test_new_request_err_downloadbuild() {
                 }
             );
 
-            let request_info = request_info.unwrap();
-            assert_eq!(request_info.id, VALID_REQUEST_ID);
-            assert!(!request_info.path.exists());
+            let session_info = session_info.unwrap();
+            assert_eq!(session_info.id, VALID_SESSION_ID);
+            assert!(!session_info.path.exists());
         },
     )
     .await;
@@ -417,11 +414,11 @@ async fn test_new_request_err_downloadbuild() {
         TestTaskcluster::with_failure(TaskclusterFailureMode::NotZip),
         TestPerfProvider::default(),
 
-        TestRequestManager::default(),
+        TestSessionManager::default(),
         |mut recorder| async move {
             assert_matches!(
                 recorder
-                    .send_new_request("task_id", None, vec![])
+                    .new_session("task_id", None, vec![])
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -431,9 +428,9 @@ async fn test_new_request_err_downloadbuild() {
                 }
             );
         },
-        |RunnerInfo { result, request_info }| {
-            let request_info = request_info.unwrap();
-            assert_eq!(request_info.id, VALID_REQUEST_ID);
+        |RunnerInfo { result, session_info }| {
+            let session_info = session_info.unwrap();
+            assert_eq!(session_info.id, VALID_SESSION_ID);
 
             assert_matches!(
                 result.unwrap_err(),
@@ -443,20 +440,20 @@ async fn test_new_request_err_downloadbuild() {
                         e.to_string(),
                         format!(
                             "could not read zip archive `{}': Invalid Zip archive: Could not find central directory end",
-                            request_info.path.join("firefox.zip").display()
+                            session_info.path.join("firefox.zip").display()
                         )
                     );
                 }
             );
 
-            assert!(!request_info.path.exists());
+            assert!(!session_info.path.exists());
         },
     )
     .await;
 }
 
 #[tokio::test]
-async fn test_new_request_err_recvprofile() {
+async fn test_new_session_err_recvprofile() {
     let mut listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
 
     run_proto_test(
@@ -465,11 +462,11 @@ async fn test_new_request_err_recvprofile() {
         TestTaskcluster::default(),
         TestPerfProvider::default(),
 
-        TestRequestManager::default(),
+        TestSessionManager::default(),
         |mut recorder| async move {
             assert_matches!(
                 recorder
-                    .send_new_request("task_id", Some(&test_dir().join("README.md")), vec![])
+                    .new_session("task_id", Some(&test_dir().join("README.md")), vec![])
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -481,9 +478,9 @@ async fn test_new_request_err_recvprofile() {
                 }
             );
         },
-        |RunnerInfo { result, request_info }| {
-            let request_info = request_info.unwrap();
-            assert_eq!(request_info.id, VALID_REQUEST_ID);
+        |RunnerInfo { result, session_info }| {
+            let session_info = session_info.unwrap();
+            assert_eq!(session_info.id, VALID_SESSION_ID);
 
             assert_matches!(
                 result.unwrap_err(),
@@ -492,13 +489,13 @@ async fn test_new_request_err_recvprofile() {
                         e.to_string(),
                         format!(
                             "could not read zip archive `{}': Invalid Zip archive: Could not find central directory end",
-                            request_info.path.join("profile.zip").display()
+                            session_info.path.join("profile.zip").display()
                         )
                     );
                 }
             );
 
-            assert!(!request_info.path.exists());
+            assert!(!session_info.path.exists());
         },
     )
     .await;
@@ -508,11 +505,11 @@ async fn test_new_request_err_recvprofile() {
         TestShutdownProvider::default(),
         TestTaskcluster::default(),
         TestPerfProvider::default(),
-        TestRequestManager::default(),
+        TestSessionManager::default(),
         |mut recorder| async move {
             assert_matches!(
                 recorder
-                    .send_new_request("task_id", Some(&test_dir().join("empty.zip")), vec![])
+                    .new_session("task_id", Some(&test_dir().join("empty.zip")), vec![])
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -522,19 +519,19 @@ async fn test_new_request_err_recvprofile() {
         },
         |RunnerInfo {
              result,
-             request_info,
+             session_info,
          }| {
             assert_matches!(result.unwrap_err(), RunnerProtoError::EmptyProfile);
 
-            let request_info = request_info.unwrap();
-            assert!(!request_info.path.exists());
+            let session_info = session_info.unwrap();
+            assert!(!session_info.path.exists());
         },
     )
     .await;
 }
 
 #[tokio::test]
-async fn test_new_request_err_restarting() {
+async fn test_new_session_err_restarting() {
     let mut listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
 
     run_proto_test(
@@ -542,10 +539,10 @@ async fn test_new_request_err_restarting() {
         TestShutdownProvider::with_error("could not shut down"),
         TestTaskcluster::default(),
         TestPerfProvider::default(),
-        TestRequestManager::default(),
+        TestSessionManager::default(),
         |mut recorder| async move {
             assert_matches!(
-                recorder.send_new_request("task_id", None, vec![])
+                recorder.new_session("task_id", None, vec![])
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -555,7 +552,7 @@ async fn test_new_request_err_restarting() {
         },
         |RunnerInfo {
              result,
-             request_info,
+             session_info,
          }| {
             assert_matches!(
                 result.unwrap_err(),
@@ -564,15 +561,15 @@ async fn test_new_request_err_restarting() {
                 }
             );
 
-            let request_info = request_info.unwrap();
-            assert!(!request_info.path.exists());
+            let session_info = session_info.unwrap();
+            assert!(!session_info.path.exists());
         },
     )
     .await;
 }
 
 #[tokio::test]
-async fn test_resume_request_ok() {
+async fn test_resume_session_ok() {
     let mut listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
 
     run_proto_test(
@@ -580,19 +577,19 @@ async fn test_resume_request_ok() {
         TestShutdownProvider::default(),
         TestTaskcluster::default(),
         TestPerfProvider::asserting_invoked(),
-        TestRequestManager::default(),
+        TestSessionManager::default(),
         |mut recorder| async move {
             recorder
-                .send_resume_request(VALID_REQUEST_ID, Idle::Wait)
+                .resume_session(VALID_SESSION_ID, Idle::Wait)
                 .await
                 .unwrap();
         },
         |RunnerInfo {
              result,
-             request_info,
+             session_info,
          }| {
             assert_eq!(result.unwrap(), false);
-            assert_eq!(request_info.unwrap().id, VALID_REQUEST_ID);
+            assert_eq!(session_info.unwrap().id, VALID_SESSION_ID);
         },
     )
     .await;
@@ -602,26 +599,26 @@ async fn test_resume_request_ok() {
         TestShutdownProvider::default(),
         TestTaskcluster::default(),
         TestPerfProvider::asserting_not_invoked(),
-        TestRequestManager::default(),
+        TestSessionManager::default(),
         |mut recorder| async move {
             recorder
-                .send_resume_request(VALID_REQUEST_ID, Idle::Skip)
+                .resume_session(VALID_SESSION_ID, Idle::Skip)
                 .await
                 .unwrap();
         },
         |RunnerInfo {
              result,
-             request_info,
+             session_info,
          }| {
             assert_eq!(result.unwrap(), false);
-            assert_eq!(request_info.unwrap().id, VALID_REQUEST_ID);
+            assert_eq!(session_info.unwrap().id, VALID_SESSION_ID);
         },
     )
     .await;
 }
 
 #[tokio::test]
-async fn test_resume_request_err_request_manager() {
+async fn test_resume_session_err_request_manager() {
     let mut listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
 
     run_proto_test(
@@ -629,31 +626,31 @@ async fn test_resume_request_err_request_manager() {
         TestShutdownProvider::default(),
         TestTaskcluster::default(),
         TestPerfProvider::default(),
-        TestRequestManager::default(),
+        TestSessionManager::default(),
         |mut recorder| async move {
             assert_matches!(
                 // Any request that is not VALID_REQUEST_ID triggers this error.
-                recorder.send_resume_request("foobar", Idle::Skip).await.unwrap_err(),
+                recorder.resume_session("foobar", Idle::Skip).await.unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
-                    assert_eq!(e.to_string(), "Invalid request `foobar': ID contains invalid characters");
+                    assert_eq!(e.to_string(), "Invalid session ID `foobar': ID contains invalid characters");
                 }
             );
         },
         |RunnerInfo {
              result,
-             request_info,
+             session_info,
          }| {
              assert_matches!(
                 result.unwrap_err(),
-                RunnerProtoError::ResumeRequest(e) => {
-                    assert_eq!(e, ResumeRequestError {
-                        kind: ResumeRequestErrorKind::InvalidId,
-                        request_id: "foobar".into(),
+                RunnerProtoError::ResumeSession(e) => {
+                    assert_eq!(e, ResumeSessionError {
+                        kind: ResumeSessionErrorKind::InvalidId,
+                        session_id: "foobar".into(),
                     });
                 }
             );
 
-            assert!(request_info.is_none());
+            assert!(session_info.is_none());
          },
     )
     .await;
@@ -663,48 +660,48 @@ async fn test_resume_request_err_request_manager() {
         TestShutdownProvider::default(),
         TestTaskcluster::default(),
         TestPerfProvider::default(),
-        TestRequestManager::with_failure(RequestFailureMode::ResumeRequest(
-            ResumeRequestErrorKind::MissingProfile,
+        TestSessionManager::with_failure(SessionFailureMode::ResumeSession(
+            ResumeSessionErrorKind::MissingProfile,
         )),
         |mut recorder| async move {
             assert_matches!(
                 recorder
-                    .send_resume_request(VALID_REQUEST_ID, Idle::Skip)
+                    .resume_session(VALID_SESSION_ID, Idle::Skip)
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
                     assert_eq!(
                         e.to_string(),
-                        "Invalid request `REQUESTID': missing a profile directory"
+                        "Invalid session ID `REQUESTID': missing a profile directory"
                     );
                 }
             );
         },
         |RunnerInfo {
              result,
-             request_info,
+             session_info,
          }| {
             assert_matches!(
                 result.unwrap_err(),
-                RunnerProtoError::ResumeRequest(e) => {
+                RunnerProtoError::ResumeSession(e) => {
                     assert_eq!(
                         e,
-                        ResumeRequestError {
-                            kind: ResumeRequestErrorKind::MissingProfile,
-                            request_id: VALID_REQUEST_ID.into(),
+                        ResumeSessionError {
+                            kind: ResumeSessionErrorKind::MissingProfile,
+                            session_id: VALID_SESSION_ID.into(),
                         }
                     );
                 }
             );
 
-            assert!(request_info.is_none());
+            assert!(session_info.is_none());
         },
     )
     .await;
 }
 
 #[tokio::test]
-async fn test_resume_request_err_waitforidle() {
+async fn test_resume_session_err_waitforidle() {
     let mut listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
 
     run_proto_test(
@@ -712,11 +709,11 @@ async fn test_resume_request_err_waitforidle() {
         TestShutdownProvider::default(),
         TestTaskcluster::default(),
         TestPerfProvider::with_failure(PerfFailureMode::DiskIoError("disk io error")),
-        TestRequestManager::default(),
+        TestSessionManager::default(),
         |mut recorder| async move {
             assert_matches!(
                 recorder
-                    .send_resume_request(VALID_REQUEST_ID, Idle::Wait)
+                    .resume_session(VALID_SESSION_ID, Idle::Wait)
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -729,7 +726,7 @@ async fn test_resume_request_err_waitforidle() {
         },
         |RunnerInfo {
              result,
-             request_info,
+             session_info,
          }| {
             assert_matches!(
                 result.unwrap_err(),
@@ -738,7 +735,7 @@ async fn test_resume_request_err_waitforidle() {
                 }
             );
 
-            assert_eq!(request_info.unwrap().id, VALID_REQUEST_ID);
+            assert_eq!(session_info.unwrap().id, VALID_SESSION_ID);
         },
     )
     .await;
@@ -748,11 +745,11 @@ async fn test_resume_request_err_waitforidle() {
         TestShutdownProvider::default(),
         TestTaskcluster::default(),
         TestPerfProvider::with_failure(PerfFailureMode::CpuTimeError("cpu time error")),
-        TestRequestManager::default(),
+        TestSessionManager::default(),
         |mut recorder| async move {
             assert_matches!(
                 recorder
-                    .send_resume_request(VALID_REQUEST_ID, Idle::Wait)
+                    .resume_session(VALID_SESSION_ID, Idle::Wait)
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -765,7 +762,7 @@ async fn test_resume_request_err_waitforidle() {
         },
         |RunnerInfo {
              result,
-             request_info,
+             session_info,
          }| {
             assert_matches!(
                 result.unwrap_err(),
@@ -773,7 +770,7 @@ async fn test_resume_request_err_waitforidle() {
                     assert_eq!(e.to_string(), "cpu time error");
                 }
             );
-            assert_eq!(request_info.unwrap().id, VALID_REQUEST_ID);
+            assert_eq!(session_info.unwrap().id, VALID_SESSION_ID);
         },
     )
     .await;
@@ -783,11 +780,11 @@ async fn test_resume_request_err_waitforidle() {
         TestShutdownProvider::default(),
         TestTaskcluster::default(),
         TestPerfProvider::with_failure(PerfFailureMode::DiskNeverIdle),
-        TestRequestManager::default(),
+        TestSessionManager::default(),
         |mut recorder| async move {
             assert_matches!(
                 recorder
-                    .send_resume_request(VALID_REQUEST_ID, Idle::Wait)
+                    .resume_session(VALID_SESSION_ID, Idle::Wait)
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -800,13 +797,13 @@ async fn test_resume_request_err_waitforidle() {
         },
         |RunnerInfo {
              result,
-             request_info,
+             session_info,
          }| {
             assert_matches!(
                 result.unwrap_err(),
                 RunnerProtoError::WaitForIdle(WaitForIdleError::TimeoutError)
             );
-            assert_eq!(request_info.unwrap().id, VALID_REQUEST_ID);
+            assert_eq!(session_info.unwrap().id, VALID_SESSION_ID);
         },
     )
     .await;
@@ -816,11 +813,11 @@ async fn test_resume_request_err_waitforidle() {
         TestShutdownProvider::default(),
         TestTaskcluster::default(),
         TestPerfProvider::with_failure(PerfFailureMode::CpuNeverIdle),
-        TestRequestManager::default(),
+        TestSessionManager::default(),
         |mut recorder| async move {
             assert_matches!(
                 recorder
-                    .send_resume_request(VALID_REQUEST_ID, Idle::Wait)
+                    .resume_session(VALID_SESSION_ID, Idle::Wait)
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -833,13 +830,13 @@ async fn test_resume_request_err_waitforidle() {
         },
         |RunnerInfo {
              result,
-             request_info,
+             session_info,
          }| {
             assert_matches!(
                 result.unwrap_err(),
                 RunnerProtoError::WaitForIdle(WaitForIdleError::TimeoutError)
             );
-            assert_eq!(request_info.unwrap().id, VALID_REQUEST_ID);
+            assert_eq!(session_info.unwrap().id, VALID_SESSION_ID);
         },
     )
     .await;

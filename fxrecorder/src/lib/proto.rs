@@ -28,22 +28,22 @@ impl RecorderProto {
         }
     }
 
-    /// Send a new request to the runner.
-    pub async fn send_new_request(
+    /// Send a request for a new session to the runner.
+    pub async fn new_session(
         &mut self,
         task_id: &str,
         profile_path: Option<&Path>,
         prefs: Vec<(String, PrefValue)>,
     ) -> Result<String, RecorderProtoError> {
-        info!(self.log, "Sending request");
+        info!(self.log, "Requesting new session");
 
         let profile_size = match profile_path {
             None => None,
             Some(profile_path) => Some(tokio::fs::metadata(profile_path).await?.len()),
         };
 
-        self.send::<Request>(
-            NewRequest {
+        self.send::<Session>(
+            NewSessionRequest {
                 build_task_id: task_id.into(),
                 profile_size,
                 prefs,
@@ -52,10 +52,10 @@ impl RecorderProto {
         )
         .await?;
 
-        let request_id = match self.recv::<NewRequestResponse>().await?.request_id {
-            Ok(request_id) => request_id,
+        let session_id = match self.recv::<NewSessionResponse>().await?.session_id {
+            Ok(session_id) => session_id,
             Err(e) => {
-                error!(self.log, "runner could not handle new request"; "error" => %e);
+                error!(self.log, "runner could not create new session"; "error" => %e);
                 return Err(e.into());
             }
         };
@@ -107,19 +107,19 @@ impl RecorderProto {
 
         info!(self.log, "Runner is restarting...");
 
-        Ok(request_id)
+        Ok(session_id)
     }
 
-    /// Send a resume request to the runner.
-    pub async fn send_resume_request(
+    /// Send a request to resume a session to the runner.
+    pub async fn resume_session(
         &mut self,
-        request_id: &str,
+        session_id: &str,
         idle: Idle,
     ) -> Result<(), RecorderProtoError> {
-        info!(self.log, "Resuming request");
-        self.send::<Request>(
-            ResumeRequest {
-                id: request_id.into(),
+        info!(self.log, "Resuming session");
+        self.send::<Session>(
+            ResumeSessionRequest {
+                session_id: session_id.into(),
                 idle,
             }
             .into(),
@@ -127,7 +127,12 @@ impl RecorderProto {
         .await?;
 
         if let ResumeResponse { result: Err(e) } = self.recv().await? {
-            error!(self.log, "Could not resume request with runner"; "error" => %e);
+            error!(
+                self.log,
+                "Could not resume session with runner";
+                "id" => session_id,
+                "error" => %e,
+            );
             return Err(e.into());
         }
 

@@ -11,7 +11,7 @@ use libfxrecord::{run, CommonOptions};
 use libfxrunner::config::Config;
 use libfxrunner::osapi::{WindowsPerfProvider, WindowsShutdownProvider};
 use libfxrunner::proto::RunnerProto;
-use libfxrunner::request::FsRequestManager;
+use libfxrunner::session::DefaultSessionManager;
 use libfxrunner::taskcluster::FirefoxCi;
 use slog::{error, info, warn, Logger};
 use structopt::StructOpt;
@@ -63,11 +63,11 @@ fn main() {
 }
 
 async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), Box<dyn Error>> {
-    if let Err(e) = create_dir_all(&config.requests_dir).await {
+    if let Err(e) = create_dir_all(&config.session_dir).await {
         error!(
             log,
             "Could not create requests directory";
-            "requests_dir" => config.requests_dir.display(),
+            "session_dir" => config.session_dir.display(),
             "error" => %e,
         );
 
@@ -89,7 +89,7 @@ async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), B
                 shutdown_provider(&options),
                 FirefoxCi::default(),
                 WindowsPerfProvider::default(),
-                FsRequestManager::new(log.clone(), &config.requests_dir),
+                DefaultSessionManager::new(log.clone(), &config.session_dir),
             )
             .await;
 
@@ -109,8 +109,8 @@ async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), B
             // We aren't restarting, which means we handled a resume request. We
             // only expect a single pending request at a time, so the request
             // directory *should* be empty. If it isn't, then isn't empty it.
-            if let Err(e) = cleanup_requests_dir(log.clone(), &config.requests_dir).await {
-                error!(log, "Could not cleanup requests directory"; "error" => %e);
+            if let Err(e) = cleanup_session_dir(log.clone(), &config.session_dir).await {
+                error!(log, "Could not cleanup session directory"; "error" => %e);
             }
         }
 
@@ -145,13 +145,22 @@ fn shutdown_provider(_: &Options) -> WindowsShutdownProvider {
     WindowsShutdownProvider::default()
 }
 
-async fn cleanup_requests_dir(log: slog::Logger, path: &Path) -> Result<(), io::Error> {
-    let mut entries = tokio::fs::read_dir(path).await?;
+async fn cleanup_session_dir(log: slog::Logger, path: &Path) -> Result<(), io::Error> {
+    info!(log, "Cleaning session directory...");
 
+    let mut entries = tokio::fs::read_dir(path).await?;
     while let Some(entry) = entries.next_entry().await? {
         let path = entry.path();
-        warn!(log, "requests directory was not empty"; "path" => path.display());
-        tokio::fs::remove_dir_all(&path).await?;
+        if let Err(e) = tokio::fs::remove_dir_all(&path).await {
+            error!(
+                log,
+                "Could not remove session directory";
+                "path" => path.display(),
+                "error" => %e,
+            );
+        } else {
+            warn!(log, "Deleted session"; "path" => path.display());
+        }
     }
 
     Ok(())
