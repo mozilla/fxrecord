@@ -83,7 +83,7 @@ async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), B
             let (stream, addr) = listener.accept().await?;
             info!(log, "Received connection"; "peer" => addr);
 
-            if RunnerProto::handle_request(
+            let result = RunnerProto::handle_request(
                 log.clone(),
                 stream,
                 shutdown_provider(&options),
@@ -91,9 +91,17 @@ async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), B
                 WindowsPerfProvider::default(),
                 FsRequestManager::new(log.clone(), &config.requests_dir),
             )
-            .await?
-            {
-                break;
+            .await;
+
+            match result {
+                Ok(restart) => {
+                    if restart {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    error!(log, "Encountered an unexpected error while serving a request"; "error" => ?e);
+                }
             }
 
             info!(log, "Client disconnected");
