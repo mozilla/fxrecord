@@ -6,6 +6,7 @@ mod mocks;
 mod util;
 
 use std::convert::TryInto;
+use std::fs::File;
 use std::future::Future;
 
 use assert_matches::assert_matches;
@@ -19,7 +20,7 @@ use libfxrunner::session::{
     NewSessionError, ResumeSessionError, ResumeSessionErrorKind, SessionInfo,
 };
 use libfxrunner::zip::ZipError;
-use serde_json::Value;
+use serde_json::{json, Value};
 use slog::Logger;
 use tokio::net::{TcpListener, TcpStream};
 
@@ -111,11 +112,23 @@ async fn test_new_session_ok() {
             assert_eq!(result.unwrap(), true);
 
             let session_info = session_info.unwrap();
-            assert!(session_info
-                .path
-                .join("firefox")
+            let firefox_dir = session_info.path.join("firefox");
+            assert!(firefox_dir
                 .join("firefox.exe")
                 .is_file());
+
+            let dist_path = firefox_dir.join("distribution");
+            assert!(dist_path.is_dir());
+            let policies: Value = {
+                let f = File::open(dist_path.join("policies.json")).unwrap();
+                serde_json::from_reader(f).unwrap()
+            };
+
+            assert_eq!(policies, json!({
+                "policies": {
+                    "DisableAppUpdate": true
+                }
+            }));
 
             let profile_dir = session_info.path.join("profile");
             assert!(profile_dir.is_dir());

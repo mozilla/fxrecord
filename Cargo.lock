@@ -484,6 +484,7 @@ dependencies = [
  "assert_matches",
  "async-trait",
  "futures",
+ "indoc",
  "libfxrecord",
  "mockito",
  "rand",

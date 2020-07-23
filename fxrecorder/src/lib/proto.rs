@@ -84,6 +84,11 @@ impl RecorderProto {
             }
         }
 
+        if let DisableUpdates { result: Err(e) } = self.recv().await? {
+            error!(self.log, "Runner could not disable updates"; "error" => %e);
+            return Err(e.into());
+        }
+
         if let Some(profile_path) = profile_path {
             self.send_profile(profile_path, profile_size.unwrap())
                 .await?

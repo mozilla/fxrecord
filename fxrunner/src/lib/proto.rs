@@ -5,13 +5,14 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
+use indoc::indoc;
 use libfxrecord::error::ErrorExt;
 use libfxrecord::net::*;
 use libfxrecord::prefs::write_prefs;
 use scopeguard::{guard, ScopeGuard};
 use slog::{error, info, Logger};
 use thiserror::Error;
-use tokio::fs::{rename, File, OpenOptions};
+use tokio::fs::{create_dir, rename, File, OpenOptions};
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio::task::spawn_blocking;
@@ -99,6 +100,17 @@ where
             .download_build(&session_info, &request.build_task_id)
             .await?;
         assert!(firefox_bin.is_file_async().await);
+
+        if let Err(e) = self.disable_updates(&session_info).await {
+            error!(self.log, "Could not disable updates for downloaded Firefox"; "error" => ?e);
+            self.send(DisableUpdates {
+                result: Err(e.into_error_message()),
+            })
+            .await?;
+
+            return Err(e);
+        }
+        self.send(DisableUpdates { result: Ok(()) }).await?;
 
         let profile_path = match request.profile_size {
             Some(profile_size) => self.recv_profile(&session_info, profile_size).await?,
@@ -291,6 +303,38 @@ where
         Ok(firefox_path)
     }
 
+    async fn disable_updates(
+        &mut self,
+        session_info: &SessionInfo<'_>,
+    ) -> Result<(), RunnerProtoError<S, T, P>> {
+        const DISABLE_UPDATE_POLICY: &[u8] = indoc!(
+            br#"
+            {
+                "policies": {
+                    "DisableAppUpdate": true
+                }
+            }
+            "#
+        );
+        let distribution_dir = session_info.path.join("firefox").join("distribution");
+
+        create_dir(&distribution_dir)
+            .await
+            .map_err(RunnerProtoError::DisableUpdates)?;
+
+        OpenOptions::new()
+            .create(true)
+            .write(true)
+            .open(distribution_dir.join("policies.json"))
+            .await
+            .map_err(RunnerProtoError::DisableUpdates)?
+            .write_all(DISABLE_UPDATE_POLICY)
+            .await
+            .map_err(RunnerProtoError::DisableUpdates)?;
+
+        Ok(())
+    }
+
     /// Receive a profile from the recorder.
     async fn recv_profile(
         &mut self,
@@ -440,6 +484,9 @@ where
 
     #[error(transparent)]
     Shutdown(S::Error),
+
+    #[error("Could not disable updates: {}", .0)]
+    DisableUpdates(#[source] io::Error),
 
     #[error(transparent)]
     Taskcluster(T::Error),

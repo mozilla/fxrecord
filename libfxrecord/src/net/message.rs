@@ -156,6 +156,11 @@ message_type! {
         pub result: ForeignResult<DownloadStatus>,
     }
 
+    /// The status of the disable updates phase.
+    pub struct DisableUpdates {
+        pub result: ForeignResult<()>,
+    }
+
     /// The status of the RecvProfile phase.
     pub struct RecvProfile {
         pub result: ForeignResult<DownloadStatus>,
