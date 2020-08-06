@@ -60,8 +60,6 @@ pub(super) fn initiate_restart(reason: &str) -> Result<(), ShutdownError> {
     }
 
     let success = unsafe {
-        // We cast `name`'s underlying pointer to `LPSTR` (`*mut c_char`) here,
-        // but it is safe because it will not be modified through the pointer.
         LookupPrivilegeValueA(
             null_mut(),
             name.as_ptr(),
