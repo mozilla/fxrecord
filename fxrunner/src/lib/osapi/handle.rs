@@ -4,7 +4,7 @@
 
 use std::ptr::null_mut;
 
-use winapi::um::handleapi::CloseHandle;
+use winapi::um::handleapi;
 use winapi::um::winnt::HANDLE;
 
 // A wrapper around a HANDLE that automatically closes.
@@ -37,7 +37,7 @@ impl From<HANDLE> for Handle {
 impl Drop for Handle {
     fn drop(&mut self) {
         if !self.0.is_null() {
-            let rv = unsafe { CloseHandle(self.0) };
+            let rv = unsafe { handleapi::CloseHandle(self.0) };
             assert!(rv != 0);
 
             self.0 = null_mut();

@@ -8,14 +8,8 @@ use std::ptr::null_mut;
 use thiserror::Error;
 use winapi::shared::minwindef::{BOOL, DWORD};
 use winapi::shared::ntdef::{LPSTR, LUID};
-use winapi::um::processthreadsapi::{GetCurrentProcess, OpenProcessToken};
-use winapi::um::reason::{SHTDN_REASON_FLAG_PLANNED, SHTDN_REASON_MINOR_OTHER};
-use winapi::um::securitybaseapi::AdjustTokenPrivileges;
-use winapi::um::winbase::LookupPrivilegeValueA;
-use winapi::um::winnt::{
-    SE_PRIVILEGE_ENABLED, SE_SHUTDOWN_NAME, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY,
-};
-use winapi::um::winreg::InitiateSystemShutdownExA;
+use winapi::um::winnt::TOKEN_PRIVILEGES;
+use winapi::um::{processthreadsapi, reason, securitybaseapi, winbase, winnt, winreg};
 
 use crate::osapi::error::{get_last_error, WindowsError};
 use crate::osapi::handle::Handle;
@@ -44,11 +38,11 @@ pub(super) fn initiate_restart(reason: &str) -> Result<(), ShutdownError> {
     let mut token = Handle::null();
     let mut privs = unsafe { std::mem::zeroed::<TOKEN_PRIVILEGES>() };
 
-    let name = CString::new(SE_SHUTDOWN_NAME).unwrap();
+    let name = CString::new(winnt::SE_SHUTDOWN_NAME).unwrap();
     let success = unsafe {
-        OpenProcessToken(
-            GetCurrentProcess(),
-            TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY,
+        processthreadsapi::OpenProcessToken(
+            processthreadsapi::GetCurrentProcess(),
+            winnt::TOKEN_ADJUST_PRIVILEGES | winnt::TOKEN_QUERY,
             token.as_out_ptr(),
         ) != 0
     };
@@ -60,7 +54,7 @@ pub(super) fn initiate_restart(reason: &str) -> Result<(), ShutdownError> {
     }
 
     let success = unsafe {
-        LookupPrivilegeValueA(
+        winbase::LookupPrivilegeValueA(
             null_mut(),
             name.as_ptr(),
             &mut privs.Privileges[0].Luid as *mut LUID,
@@ -74,16 +68,16 @@ pub(super) fn initiate_restart(reason: &str) -> Result<(), ShutdownError> {
     }
 
     privs.PrivilegeCount = 1;
-    privs.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+    privs.Privileges[0].Attributes = winnt::SE_PRIVILEGE_ENABLED;
 
     let success = unsafe {
-        AdjustTokenPrivileges(
+        securitybaseapi::AdjustTokenPrivileges(
             token.as_ptr(),
             false as BOOL,
             &mut privs as *mut TOKEN_PRIVILEGES,
             0 as DWORD,
-            null_mut::<TOKEN_PRIVILEGES>(),
-            null_mut::<DWORD>(),
+            null_mut(),
+            null_mut(),
         ) != 0
     };
 
@@ -96,7 +90,7 @@ pub(super) fn initiate_restart(reason: &str) -> Result<(), ShutdownError> {
 
     let reason = CString::new(reason).unwrap();
     let success = unsafe {
-        InitiateSystemShutdownExA(
+        winreg::InitiateSystemShutdownExA(
             // Shutdown this machine.
             null_mut(),
             // This casts a `*const c_char` to a `*mut c_char` but the API does
@@ -109,7 +103,7 @@ pub(super) fn initiate_restart(reason: &str) -> Result<(), ShutdownError> {
             true as BOOL,
             // Reboot after shutdown.
             true as BOOL,
-            SHTDN_REASON_MINOR_OTHER | SHTDN_REASON_FLAG_PLANNED,
+            reason::SHTDN_REASON_MINOR_OTHER | reason::SHTDN_REASON_FLAG_PLANNED,
         ) != 0
     };
 

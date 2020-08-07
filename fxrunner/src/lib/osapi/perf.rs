@@ -8,11 +8,8 @@ use std::u32;
 
 use thiserror::Error;
 use winapi::shared::minwindef::FILETIME;
-use winapi::um::fileapi::{CreateFileA, OPEN_EXISTING};
-use winapi::um::ioapiset::DeviceIoControl;
-use winapi::um::processthreadsapi::GetSystemTimes;
-use winapi::um::winioctl::{DISK_PERFORMANCE, IOCTL_DISK_PERFORMANCE};
-use winapi::um::winnt::{FILE_SHARE_READ, FILE_SHARE_WRITE};
+use winapi::um::winioctl::DISK_PERFORMANCE;
+use winapi::um::{fileapi, ioapiset, processthreadsapi, winioctl, winnt};
 
 use crate::osapi::error::{get_last_error, WindowsError};
 use crate::osapi::handle::Handle;
@@ -46,12 +43,12 @@ pub(super) fn get_disk_io_counters() -> Result<IoCounters, DiskIoError> {
     let device_path = CString::new(r#"\\.\C:"#).unwrap();
 
     let handle = Handle::from(unsafe {
-        CreateFileA(
+        fileapi::CreateFileA(
             device_path.as_ptr(),
             0,
-            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            winnt::FILE_SHARE_READ | winnt::FILE_SHARE_WRITE,
             null_mut(),
-            OPEN_EXISTING,
+            fileapi::OPEN_EXISTING,
             0,
             null_mut(),
         )
@@ -67,9 +64,9 @@ pub(super) fn get_disk_io_counters() -> Result<IoCounters, DiskIoError> {
 
     let rv = unsafe {
         let mut bytes: u32 = 0;
-        DeviceIoControl(
+        ioapiset::DeviceIoControl(
             handle.as_ptr(),
-            IOCTL_DISK_PERFORMANCE,
+            winioctl::IOCTL_DISK_PERFORMANCE,
             null_mut(),
             0,
             &mut disk_perf as *mut DISK_PERFORMANCE as *mut _,
@@ -107,7 +104,7 @@ pub(super) fn get_cpu_idle_time() -> Result<f64, WindowsError> {
     };
 
     let rv = unsafe {
-        GetSystemTimes(
+        processthreadsapi::GetSystemTimes(
             &mut idle_time as *mut _,
             &mut kernel_time as *mut _,
             &mut user_time as *mut _,

@@ -9,12 +9,8 @@ use std::ptr::{null, null_mut};
 use libfxrecord::error::ErrorMessage;
 use thiserror::Error;
 use winapi::shared::minwindef::{DWORD, HLOCAL};
-use winapi::shared::ntdef::{LANG_NEUTRAL, LPSTR, MAKELANGID, SUBLANG_DEFAULT};
-use winapi::um::errhandlingapi::GetLastError;
-use winapi::um::winbase::{
-    FormatMessageA, LocalFree, FORMAT_MESSAGE_ALLOCATE_BUFFER, FORMAT_MESSAGE_FROM_SYSTEM,
-    FORMAT_MESSAGE_IGNORE_INSERTS,
-};
+use winapi::shared::ntdef::{self, LPSTR};
+use winapi::um::{errhandlingapi, winbase};
 
 /// An error from Windows.
 ///
@@ -41,17 +37,17 @@ enum WindowsErrorImpl {
 
 /// Return the last windows error the occurred.
 pub fn get_last_error() -> WindowsError {
-    let error_code = unsafe { GetLastError() };
+    let error_code = unsafe { errhandlingapi::GetLastError() };
     let mut buf_ptr: LPSTR = null_mut();
 
     let rv = unsafe {
-        FormatMessageA(
-            FORMAT_MESSAGE_ALLOCATE_BUFFER
-                | FORMAT_MESSAGE_FROM_SYSTEM
-                | FORMAT_MESSAGE_IGNORE_INSERTS,
+        winbase::FormatMessageA(
+            winbase::FORMAT_MESSAGE_ALLOCATE_BUFFER
+                | winbase::FORMAT_MESSAGE_FROM_SYSTEM
+                | winbase::FORMAT_MESSAGE_IGNORE_INSERTS,
             null(),
             error_code,
-            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT).into(),
+            ntdef::MAKELANGID(ntdef::LANG_NEUTRAL, ntdef::SUBLANG_DEFAULT).into(),
             // When the FORMAT_MESSAGE_ALLOCATE_BUFFER flag is passed,
             // FormatMessageA treats this argument as a char** and will store
             // the pointer to the allocated buffer in `ptr`.
@@ -59,13 +55,13 @@ pub fn get_last_error() -> WindowsError {
             // See: https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-formatmessagea
             &mut buf_ptr as *mut LPSTR as LPSTR,
             0,
-            null_mut::<LPSTR>(),
+            null_mut(),
         )
     };
 
     if rv == 0 {
         // We couldn't get a description of the error.
-        let format_error_code = unsafe { GetLastError() };
+        let format_error_code = unsafe { errhandlingapi::GetLastError() };
         return WindowsError(WindowsErrorImpl::FormatMessageFailed {
             error_code,
             format_error_code,
@@ -82,7 +78,7 @@ pub fn get_last_error() -> WindowsError {
     forget(cstr);
 
     unsafe {
-        LocalFree(buf_ptr as HLOCAL);
+        winbase::LocalFree(buf_ptr as HLOCAL);
     }
 
     WindowsError(WindowsErrorImpl::Message(ErrorMessage(msg)))
