@@ -2,7 +2,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use std::convert::TryFrom;
 use std::ffi::c_void;
+use std::io;
 use std::ptr::null_mut;
 
 use winapi::um::handleapi;
@@ -60,11 +62,14 @@ where
     }
 }
 
-impl<T> From<*mut T> for AutoClosingHandle<T>
-where
-    *mut T: ClosableHandle,
-{
-    fn from(handle: *mut T) -> Self {
-        Self(handle)
+impl TryFrom<HANDLE> for Handle {
+    type Error = io::Error;
+
+    fn try_from(h: HANDLE) -> Result<Self, Self::Error> {
+        if h == handleapi::INVALID_HANDLE_VALUE {
+            Err(io::Error::last_os_error())
+        } else {
+            Ok(AutoClosingHandle(h))
+        }
     }
 }

@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use std::convert::TryFrom;
 use std::ffi::CString;
 use std::io;
 use std::ptr::null_mut;
@@ -42,7 +43,7 @@ pub(super) fn get_disk_io_counters() -> Result<IoCounters, DiskIoError> {
     // Implementation detail: reference laptops have a SINGLE logical drive, C:\.
     let device_path = CString::new(r#"\\.\C:"#).unwrap();
 
-    let handle = Handle::from(unsafe {
+    let handle = Handle::try_from(unsafe {
         fileapi::CreateFileA(
             device_path.as_ptr(),
             0,
@@ -52,15 +53,11 @@ pub(super) fn get_disk_io_counters() -> Result<IoCounters, DiskIoError> {
             0,
             null_mut(),
         )
-    });
-
-    if handle.as_ptr().is_null() {
-        // There is no C drive?
-        return Err(DiskIoError {
-            kind: DiskIoErrorKind::NoLogicalCDrive,
-            source: io::Error::last_os_error(),
-        });
-    }
+    })
+    .map_err(|source| DiskIoError {
+        kind: DiskIoErrorKind::NoLogicalCDrive,
+        source,
+    })?;
 
     let rv = unsafe {
         let mut bytes: u32 = 0;
