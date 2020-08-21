@@ -6,17 +6,16 @@
 
 use std::error::Error;
 use std::fmt::Debug;
+use std::io;
 use std::time::Duration;
 
 use thiserror::Error;
 use tokio::time::delay_for;
 
-mod error;
 mod handle;
 mod perf;
 mod shutdown;
 
-pub use error::WindowsError;
 pub use perf::IoCounters;
 
 /// A trait providing the ability to restart the current machine.
@@ -89,7 +88,7 @@ pub struct WindowsPerfProvider;
 
 impl PerfProvider for WindowsPerfProvider {
     type DiskIoError = perf::DiskIoError;
-    type CpuTimeError = WindowsError;
+    type CpuTimeError = io::Error;
 
     fn get_disk_io_counters(&self) -> Result<IoCounters, Self::DiskIoError> {
         perf::get_disk_io_counters()

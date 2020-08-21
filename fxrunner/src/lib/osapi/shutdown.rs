@@ -3,6 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use std::ffi::CString;
+use std::io;
 use std::ptr::null_mut;
 
 use thiserror::Error;
@@ -11,7 +12,6 @@ use winapi::shared::ntdef::{LPSTR, LUID};
 use winapi::um::winnt::TOKEN_PRIVILEGES;
 use winapi::um::{processthreadsapi, reason, securitybaseapi, winbase, winnt, winreg};
 
-use crate::osapi::error::{get_last_error, WindowsError};
 use crate::osapi::handle::Handle;
 
 #[derive(Debug, Error)]
@@ -30,7 +30,7 @@ enum ShutdownErrorKind {
 #[error("{}: {}", .kind, .source)]
 pub struct ShutdownError {
     kind: ShutdownErrorKind,
-    source: WindowsError,
+    source: io::Error,
 }
 
 // See: https://docs.microsoft.com/en-us/windows/win32/shutdown/how-to-shut-down-the-system
@@ -49,7 +49,7 @@ pub(super) fn initiate_restart(reason: &str) -> Result<(), ShutdownError> {
     if !success {
         return Err(ShutdownError {
             kind: ShutdownErrorKind::OpenProcessToken,
-            source: get_last_error(),
+            source: io::Error::last_os_error(),
         });
     }
 
@@ -63,7 +63,7 @@ pub(super) fn initiate_restart(reason: &str) -> Result<(), ShutdownError> {
     if !success {
         return Err(ShutdownError {
             kind: ShutdownErrorKind::LookupPrivilegeValue,
-            source: get_last_error(),
+            source: io::Error::last_os_error(),
         });
     }
 
@@ -84,7 +84,7 @@ pub(super) fn initiate_restart(reason: &str) -> Result<(), ShutdownError> {
     if !success {
         return Err(ShutdownError {
             kind: ShutdownErrorKind::AdjustTokenPrivileges,
-            source: get_last_error(),
+            source: io::Error::last_os_error(),
         });
     }
 
@@ -110,7 +110,7 @@ pub(super) fn initiate_restart(reason: &str) -> Result<(), ShutdownError> {
     if !success {
         return Err(ShutdownError {
             kind: ShutdownErrorKind::InitiateSystemShutdown,
-            source: get_last_error(),
+            source: io::Error::last_os_error(),
         });
     }
 

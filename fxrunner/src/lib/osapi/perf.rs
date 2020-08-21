@@ -3,6 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use std::ffi::CString;
+use std::io;
 use std::ptr::null_mut;
 use std::u32;
 
@@ -11,7 +12,6 @@ use winapi::shared::minwindef::FILETIME;
 use winapi::um::winioctl::DISK_PERFORMANCE;
 use winapi::um::{fileapi, ioapiset, processthreadsapi, winioctl, winnt};
 
-use crate::osapi::error::{get_last_error, WindowsError};
 use crate::osapi::handle::Handle;
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -33,7 +33,7 @@ enum DiskIoErrorKind {
 #[error("{}: {}", .kind, .source)]
 pub struct DiskIoError {
     kind: DiskIoErrorKind,
-    source: WindowsError,
+    source: io::Error,
 }
 
 pub(super) fn get_disk_io_counters() -> Result<IoCounters, DiskIoError> {
@@ -58,7 +58,7 @@ pub(super) fn get_disk_io_counters() -> Result<IoCounters, DiskIoError> {
         // There is no C drive?
         return Err(DiskIoError {
             kind: DiskIoErrorKind::NoLogicalCDrive,
-            source: get_last_error(),
+            source: io::Error::last_os_error(),
         });
     }
 
@@ -79,7 +79,7 @@ pub(super) fn get_disk_io_counters() -> Result<IoCounters, DiskIoError> {
     if rv == 0 {
         return Err(DiskIoError {
             kind: DiskIoErrorKind::IoCounterError,
-            source: get_last_error(),
+            source: io::Error::last_os_error(),
         });
     }
 
@@ -89,7 +89,7 @@ pub(super) fn get_disk_io_counters() -> Result<IoCounters, DiskIoError> {
     })
 }
 
-pub(super) fn get_cpu_idle_time() -> Result<f64, WindowsError> {
+pub(super) fn get_cpu_idle_time() -> Result<f64, io::Error> {
     let mut idle_time = FILETIME {
         dwLowDateTime: 0,
         dwHighDateTime: 0,
@@ -112,7 +112,7 @@ pub(super) fn get_cpu_idle_time() -> Result<f64, WindowsError> {
     };
 
     if rv == 0 {
-        return Err(get_last_error());
+        return Err(io::Error::last_os_error());
     }
 
     let idle_time = get_filetime_as_u64(idle_time) as f64;
