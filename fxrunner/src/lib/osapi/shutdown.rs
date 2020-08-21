@@ -12,6 +12,7 @@ use winapi::shared::ntdef::{LPSTR, LUID};
 use winapi::um::winnt::TOKEN_PRIVILEGES;
 use winapi::um::{processthreadsapi, reason, securitybaseapi, winbase, winnt, winreg};
 
+use crate::osapi::error::check_nonzero;
 use crate::osapi::handle::Handle;
 
 #[derive(Debug, Error)]
@@ -39,38 +40,35 @@ pub(super) fn initiate_restart(reason: &str) -> Result<(), ShutdownError> {
     let mut privs = unsafe { std::mem::zeroed::<TOKEN_PRIVILEGES>() };
 
     let name = CString::new(winnt::SE_SHUTDOWN_NAME).unwrap();
-    let success = unsafe {
+
+    check_nonzero(unsafe {
         processthreadsapi::OpenProcessToken(
             processthreadsapi::GetCurrentProcess(),
             winnt::TOKEN_ADJUST_PRIVILEGES | winnt::TOKEN_QUERY,
             token.as_out_ptr(),
-        ) != 0
-    };
-    if !success {
-        return Err(ShutdownError {
-            kind: ShutdownErrorKind::OpenProcessToken,
-            source: io::Error::last_os_error(),
-        });
-    }
+        )
+    })
+    .map_err(|source| ShutdownError {
+        kind: ShutdownErrorKind::OpenProcessToken,
+        source,
+    })?;
 
-    let success = unsafe {
+    check_nonzero(unsafe {
         winbase::LookupPrivilegeValueA(
             null_mut(),
             name.as_ptr(),
             &mut privs.Privileges[0].Luid as *mut LUID,
-        ) != 0
-    };
-    if !success {
-        return Err(ShutdownError {
-            kind: ShutdownErrorKind::LookupPrivilegeValue,
-            source: io::Error::last_os_error(),
-        });
-    }
+        )
+    })
+    .map_err(|source| ShutdownError {
+        kind: ShutdownErrorKind::LookupPrivilegeValue,
+        source,
+    })?;
 
     privs.PrivilegeCount = 1;
     privs.Privileges[0].Attributes = winnt::SE_PRIVILEGE_ENABLED;
 
-    let success = unsafe {
+    check_nonzero(unsafe {
         securitybaseapi::AdjustTokenPrivileges(
             token.as_ptr(),
             false as BOOL,
@@ -78,18 +76,15 @@ pub(super) fn initiate_restart(reason: &str) -> Result<(), ShutdownError> {
             0 as DWORD,
             null_mut(),
             null_mut(),
-        ) != 0
-    };
-
-    if !success {
-        return Err(ShutdownError {
-            kind: ShutdownErrorKind::AdjustTokenPrivileges,
-            source: io::Error::last_os_error(),
-        });
-    }
+        )
+    })
+    .map_err(|source| ShutdownError {
+        kind: ShutdownErrorKind::AdjustTokenPrivileges,
+        source,
+    })?;
 
     let reason = CString::new(reason).unwrap();
-    let success = unsafe {
+    check_nonzero(unsafe {
         winreg::InitiateSystemShutdownExA(
             // Shutdown this machine.
             null_mut(),
@@ -104,15 +99,12 @@ pub(super) fn initiate_restart(reason: &str) -> Result<(), ShutdownError> {
             // Reboot after shutdown.
             true as BOOL,
             reason::SHTDN_REASON_MINOR_OTHER | reason::SHTDN_REASON_FLAG_PLANNED,
-        ) != 0
-    };
-
-    if !success {
-        return Err(ShutdownError {
-            kind: ShutdownErrorKind::InitiateSystemShutdown,
-            source: io::Error::last_os_error(),
-        });
-    }
+        )
+    })
+    .map_err(|source| ShutdownError {
+        kind: ShutdownErrorKind::InitiateSystemShutdown,
+        source,
+    })?;
 
     Ok(())
 }

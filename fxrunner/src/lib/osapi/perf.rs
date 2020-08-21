@@ -13,6 +13,7 @@ use winapi::shared::minwindef::FILETIME;
 use winapi::um::winioctl::DISK_PERFORMANCE;
 use winapi::um::{fileapi, ioapiset, processthreadsapi, winioctl, winnt};
 
+use crate::osapi::error::check_nonzero;
 use crate::osapi::handle::Handle;
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -59,8 +60,8 @@ pub(super) fn get_disk_io_counters() -> Result<IoCounters, DiskIoError> {
         source,
     })?;
 
-    let rv = unsafe {
-        let mut bytes: u32 = 0;
+    let mut bytes: u32 = 0;
+    check_nonzero(unsafe {
         ioapiset::DeviceIoControl(
             handle.as_ptr(),
             winioctl::IOCTL_DISK_PERFORMANCE,
@@ -71,14 +72,11 @@ pub(super) fn get_disk_io_counters() -> Result<IoCounters, DiskIoError> {
             &mut bytes as *mut _,
             null_mut(),
         )
-    };
-
-    if rv == 0 {
-        return Err(DiskIoError {
-            kind: DiskIoErrorKind::IoCounterError,
-            source: io::Error::last_os_error(),
-        });
-    }
+    })
+    .map_err(|source| DiskIoError {
+        kind: DiskIoErrorKind::IoCounterError,
+        source,
+    })?;
 
     Ok(IoCounters {
         reads: disk_perf.ReadCount,
@@ -100,17 +98,13 @@ pub(super) fn get_cpu_idle_time() -> Result<f64, io::Error> {
         dwHighDateTime: 0,
     };
 
-    let rv = unsafe {
+    check_nonzero(unsafe {
         processthreadsapi::GetSystemTimes(
             &mut idle_time as *mut _,
             &mut kernel_time as *mut _,
             &mut user_time as *mut _,
         )
-    };
-
-    if rv == 0 {
-        return Err(io::Error::last_os_error());
-    }
+    })?;
 
     let idle_time = get_filetime_as_u64(idle_time) as f64;
     let kernel_time = get_filetime_as_u64(kernel_time) as f64;
