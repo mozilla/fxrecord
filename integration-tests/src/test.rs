@@ -113,9 +113,7 @@ async fn test_new_session_ok() {
 
             let session_info = session_info.unwrap();
             let firefox_dir = session_info.path.join("firefox");
-            assert!(firefox_dir
-                .join("firefox.exe")
-                .is_file());
+            assert!(firefox_dir.join("firefox.exe").is_file());
 
             let dist_path = firefox_dir.join("distribution");
             assert!(dist_path.is_dir());
@@ -124,11 +122,14 @@ async fn test_new_session_ok() {
                 serde_json::from_reader(f).unwrap()
             };
 
-            assert_eq!(policies, json!({
-                "policies": {
-                    "DisableAppUpdate": true
-                }
-            }));
+            assert_eq!(
+                policies,
+                json!({
+                    "policies": {
+                        "DisableAppUpdate": true
+                    }
+                })
+            );
 
             let profile_dir = session_info.path.join("profile");
             assert!(profile_dir.is_dir());
