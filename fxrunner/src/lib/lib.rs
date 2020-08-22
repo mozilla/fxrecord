@@ -7,5 +7,6 @@ pub mod fs;
 pub mod osapi;
 pub mod proto;
 pub mod session;
+pub mod splash;
 pub mod taskcluster;
 pub mod zip;

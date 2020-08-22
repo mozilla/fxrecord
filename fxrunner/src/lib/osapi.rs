@@ -13,7 +13,7 @@ use thiserror::Error;
 use tokio::time::delay_for;
 
 pub mod error;
-mod handle;
+pub mod handle;
 mod perf;
 mod shutdown;
 

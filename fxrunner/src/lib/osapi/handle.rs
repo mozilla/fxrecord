@@ -5,10 +5,12 @@
 use std::convert::TryFrom;
 use std::ffi::c_void;
 use std::io;
-use std::ptr::null_mut;
+use std::ptr::{null, null_mut};
 
 use winapi::um::handleapi;
 use winapi::um::winnt::HANDLE;
+
+use crate::osapi::error::check_nonzero;
 
 /// A HANDLE that is closed when dropped.
 pub type Handle = AutoClosingHandle<c_void>;
