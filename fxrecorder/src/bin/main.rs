@@ -12,6 +12,7 @@ use libfxrecord::prefs::{parse_pref, PrefValue};
 use libfxrecord::{run, CommonOptions};
 use libfxrecorder::config::Config;
 use libfxrecorder::proto::RecorderProto;
+use libfxrecorder::recorder::FfmpegRecorder;
 use libfxrecorder::retry::delayed_exponential_retry;
 use slog::{error, info, Logger};
 use structopt::StructOpt;
@@ -75,7 +76,13 @@ async fn fxrecorder(log: Logger, options: Options, config: Config) -> Result<(),
         let stream = TcpStream::connect(&config.host).await?;
         info!(log, "Connected"; "peer" => config.host);
 
-        let mut proto = RecorderProto::new(log.clone(), stream);
+        // TODO: Ideally we would split new_session and resume_session into
+        //       static methods so that we do not need to specify the recorder here.
+        let mut proto = RecorderProto::new(
+            log.clone(),
+            stream,
+            FfmpegRecorder::new(log.clone(), &config.recording),
+        );
 
         proto
             .new_session(&task_id, profile_path.as_deref(), prefs)
@@ -104,7 +111,11 @@ async fn fxrecorder(log: Logger, options: Options, config: Config) -> Result<(),
 
         info!(log, "Re-connected"; "peer" => config.host);
 
-        let mut proto = RecorderProto::new(log, stream);
+        let mut proto = RecorderProto::new(
+            log.clone(),
+            stream,
+            FfmpegRecorder::new(log.clone(), &config.recording),
+        );
 
         let idle = if options.skip_idle {
             Idle::Skip

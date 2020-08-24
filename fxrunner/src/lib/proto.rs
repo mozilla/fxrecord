@@ -3,7 +3,9 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use std::io;
+use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
 
 use indoc::indoc;
 use libfxrecord::error::ErrorExt;
@@ -15,36 +17,45 @@ use thiserror::Error;
 use tokio::fs::{create_dir, rename, File, OpenOptions};
 use tokio::net::TcpStream;
 use tokio::prelude::*;
+use tokio::process::Command;
 use tokio::task::spawn_blocking;
 
+use crate::config::Size;
 use crate::fs::PathExt;
+use crate::osapi::process::{child_processes, open_process, terminate_process};
 use crate::osapi::{cpu_and_disk_idle, PerfProvider, ShutdownProvider, WaitForIdleError};
 use crate::session::{
     cleanup_session, NewSessionError, ResumeSessionError, SessionInfo, SessionManager,
 };
+use crate::splash::Splash;
 use crate::taskcluster::Taskcluster;
 use crate::zip::{unzip, ZipError};
 
 /// The runner side of the protocol.
-pub struct RunnerProto<S, T, P, R> {
+pub struct RunnerProto<S, T, P, R, Sp> {
     inner: Option<Proto<RecorderMessage, RunnerMessage, RecorderMessageKind, RunnerMessageKind>>,
     log: Logger,
+    display_size: Size,
     shutdown_handler: S,
     tc: T,
     perf_provider: P,
     session_manager: R,
+
+    _marker: PhantomData<Sp>,
 }
 
-impl<S, T, P, R> RunnerProto<S, T, P, R>
+impl<S, T, P, R, Sp> RunnerProto<S, T, P, R, Sp>
 where
     S: ShutdownProvider,
     T: Taskcluster,
     P: PerfProvider + 'static,
     R: SessionManager,
+    Sp: Splash,
 {
     /// Handle a request from the recorder.
     pub async fn handle_request(
         log: Logger,
+        display_size: Size,
         stream: TcpStream,
         shutdown_handler: S,
         tc: T,
@@ -53,11 +64,13 @@ where
     ) -> Result<bool, RunnerProtoError<S, T, P>> {
         let mut proto = Self {
             inner: Some(Proto::new(stream)),
+            display_size,
             log,
             shutdown_handler,
             tc,
             perf_provider,
             session_manager,
+            _marker: PhantomData,
         };
 
         match proto.recv::<Session>().await? {
@@ -231,6 +244,27 @@ where
             self.send(WaitForIdle { result: Ok(()) }).await?;
         }
 
+        self.recv::<StartFirefox>().await?;
+
+        let mut splash = Sp::new(self.display_size.x as u32, self.display_size.y as u32).await?;
+        let run_firefox_result = self
+            .run_firefox(&session_info.firefox_path(), &session_info.profile_path())
+            .await;
+
+        if let Err(e) = splash.destroy() {
+            error!(self.log, "Could not destroy splash"; "error" => %e);
+
+            self.send(SessionFinished {
+                result: Err(e.into_error_message()),
+            })
+            .await?;
+        }
+
+        if let Err(e) = run_firefox_result {
+            return Err(e);
+        }
+
+        self.send(SessionFinished { result: Ok(()) }).await?;
         Ok(())
     }
 
@@ -445,6 +479,95 @@ where
         Ok(zip_path)
     }
 
+    /// Run the given Firefox binary with the specified profile.
+    ///
+    /// The process will be terminated after 45 seconds.
+    async fn run_firefox(
+        &mut self,
+        firefox_bin: &Path,
+        profile: &Path,
+    ) -> Result<(), RunnerProtoError<S, T, P>> {
+        info!(self.log, "starting Firefox...");
+        let firefox_launcher = match Command::new(firefox_bin)
+            .arg("--profile")
+            .arg(profile)
+            .arg("--new-instance")
+            .arg("--wait-for-browser")
+            .stdin(Stdio::piped())
+            .stderr(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+        {
+            Ok(launcher) => launcher,
+            Err(e) => {
+                error!(self.log, "could not start Firefox"; "error" => %e);
+                self.send(StartedFirefox {
+                    result: Err(e.into_error_message()),
+                })
+                .await?;
+                return Err(RunnerProtoError::StartFirefox(e));
+            }
+        };
+
+        self.send(StartedFirefox { result: Ok(()) }).await?;
+        self.recv::<StopFirefox>().await?;
+
+        info!(self.log, "stopping Firefox...");
+        let mut errors = Vec::new();
+
+        {
+            info!(self.log, "opening firefox process...");
+            let firefox_launcher_handle =
+                open_process(firefox_launcher.id(), winapi::um::winnt::PROCESS_ALL_ACCESS)?;
+
+            let mut terminated = false;
+
+            info!(self.log, "iterating child processes...");
+            for firefox_main_handle in child_processes(
+                firefox_launcher_handle,
+                winapi::um::winnt::PROCESS_TERMINATE,
+            )? {
+                let firefox_main_handle = match firefox_main_handle {
+                    Ok(handle) => handle,
+                    Err(e) => {
+                        error!(self.log, "could not retrieve handle to Firefox main process"; "error" => %e);
+                        errors.push(e.into_error_message());
+                        break;
+                    }
+                };
+
+                info!(self.log, "child_process()"; "handle" => ?firefox_main_handle.as_ptr());
+
+                if let Err(e) = terminate_process(&firefox_main_handle, 1) {
+                    error!(self.log, "could not terminate Firefox main process"; "error" => %e);
+                    errors.push(e.into_error_message());
+                    continue;
+                }
+
+                terminated = true;
+            }
+
+            if let Err(e) = firefox_launcher.await {
+                error!(self.log, "could not wait for Firefox launcher process to exit"; "error" => %e);
+                errors.push(e.into_error_message());
+            }
+
+            if !errors.is_empty() {
+                self.send(StoppedFirefox {
+                    result: Err(errors),
+                })
+                .await?;
+            } else if !terminated {
+                error!(self.log, "did not find a main Firefox process to terminate");
+            }
+        }
+
+        info!(self.log, "terminated Firefox");
+        self.send(StoppedFirefox { result: Ok(()) }).await?;
+
+        Ok(())
+    }
+
     /// Send the given message to the runner.
     ///
     /// If the underlying proto is None, this will panic.
@@ -505,6 +628,9 @@ where
 
     #[error(transparent)]
     EnsureProfile(io::Error),
+
+    #[error("Could not start Firefox: {}", .0)]
+    StartFirefox(#[source] io::Error),
 }
 
 impl<S, T, P> From<io::Error> for RunnerProtoError<S, T, P>

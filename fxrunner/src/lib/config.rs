@@ -15,4 +15,16 @@ pub struct Config {
 
     /// The directory to store session state in.
     pub session_dir: PathBuf,
+
+    /// The size of the display.
+    pub display_size: Size,
+}
+
+/// The size of a video.
+#[derive(Copy, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct Size {
+    /// The size in the y dimension.
+    pub y: u16,
+    /// The size in the x dimension.
+    pub x: u16,
 }

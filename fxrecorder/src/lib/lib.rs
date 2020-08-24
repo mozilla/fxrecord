@@ -4,4 +4,5 @@
 
 pub mod config;
 pub mod proto;
+pub mod recorder;
 pub mod retry;

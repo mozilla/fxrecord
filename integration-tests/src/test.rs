@@ -14,6 +14,7 @@ use futures::join;
 use indoc::indoc;
 use libfxrecord::net::*;
 use libfxrecorder::proto::{RecorderProto, RecorderProtoError};
+use libfxrunner::config::Size;
 use libfxrunner::osapi::WaitForIdleError;
 use libfxrunner::proto::{RunnerProto, RunnerProtoError};
 use libfxrunner::session::{
@@ -34,10 +35,19 @@ fn test_logger() -> Logger {
     Logger::root(slog::Discard, slog::o! {})
 }
 
-type TestRunnerProto =
-    RunnerProto<TestShutdownProvider, TestTaskcluster, TestPerfProvider, TestSessionManager>;
+type TestRunnerProto = RunnerProto<
+    TestShutdownProvider,
+    TestTaskcluster,
+    TestPerfProvider,
+    TestSessionManager,
+    TestSplash,
+>;
 type TestRunnerProtoError =
     RunnerProtoError<TestShutdownProvider, TestTaskcluster, TestPerfProvider>;
+
+type TestRecorderProto = RecorderProto<TestRecorder>;
+
+const DISPLAY_SIZE: Size = Size { x: 640, y: 480 };
 
 struct RunnerInfo {
     result: Result<bool, TestRunnerProtoError>,
@@ -51,7 +61,7 @@ async fn run_proto_test<'a, Fut>(
     tc: TestTaskcluster,
     perf_provider: TestPerfProvider,
     session_manager: TestSessionManager,
-    recorder_fn: impl FnOnce(RecorderProto) -> Fut,
+    recorder_fn: impl FnOnce(TestRecorderProto) -> Fut,
     runner_fn: impl FnOnce(RunnerInfo),
 ) where
     Fut: Future<Output = ()>,
@@ -65,6 +75,7 @@ async fn run_proto_test<'a, Fut>(
 
         let result = TestRunnerProto::handle_request(
             test_logger(),
+            DISPLAY_SIZE,
             stream,
             shutdown_provider,
             tc,
@@ -81,7 +92,7 @@ async fn run_proto_test<'a, Fut>(
 
     let recorder = async {
         let stream = TcpStream::connect(&addr).await.unwrap();
-        let proto = RecorderProto::new(test_logger(), stream);
+        let proto = TestRecorderProto::new(test_logger(), stream, TestRecorder);
 
         recorder_fn(proto).await;
     };

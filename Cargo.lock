@@ -486,6 +486,7 @@ dependencies = [
  "serde",
  "slog",
  "structopt",
+ "tempfile",
  "thiserror",
  "tokio",
  "toml",

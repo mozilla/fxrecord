@@ -56,6 +56,9 @@ pub struct RecordingConfig {
     ///
     /// This corresponds to the `-rtbufsize` argument to `ffmpeg`.
     pub buffer_size: String,
+
+    /// The minimum recording time. `ffmpeg` will record for at least this long.
+    pub minimum_recording_time_secs: u8,
 }
 
 /// The size of a video.

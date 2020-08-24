@@ -10,10 +10,12 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use libfxrecord::error::ErrorMessage;
+use libfxrecorder::recorder::Recorder;
 use libfxrunner::osapi::{IoCounters, PerfProvider, ShutdownProvider};
 use libfxrunner::session::{
     NewSessionError, ResumeSessionError, ResumeSessionErrorKind, SessionInfo, SessionManager,
 };
+use libfxrunner::splash::Splash;
 use libfxrunner::taskcluster::Taskcluster;
 use tempfile::TempDir;
 use tokio::fs;
@@ -331,5 +333,38 @@ fn clone_new_session_err(err: &NewSessionError) -> NewSessionError {
             // IO errors, this is effectively a clone implementation.
             NewSessionError::Io(io::Error::new(inner.kind(), err.to_string()))
         }
+    }
+}
+
+pub struct TestSplash;
+
+#[async_trait]
+impl Splash for TestSplash {
+    async fn new(_display_width: u32, _display_height: u32) -> Result<Self, io::Error> {
+        Ok(TestSplash)
+    }
+
+    fn destroy(&mut self) -> Result<(), io::Error> {
+        Ok(())
+    }
+}
+
+pub struct TestRecorder;
+pub struct TestRecorderHandle(PathBuf);
+
+#[async_trait]
+impl Recorder for TestRecorder {
+    type Error = io::Error;
+    type Handle = TestRecorderHandle;
+
+    async fn start_recording(&self, directory: &Path) -> Result<Self::Handle, Self::Error> {
+        Ok(TestRecorderHandle(directory.join("recording.mp4")))
+    }
+
+    async fn wait_for_recording_finished(
+        &self,
+        handle: Self::Handle,
+    ) -> Result<PathBuf, Self::Error> {
+        Ok(handle.0)
     }
 }

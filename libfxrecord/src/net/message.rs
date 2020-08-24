@@ -142,6 +142,16 @@ message_type! {
         /// request](enum.RecorderSession.html#variant.NewSession).
         ResumeSession(ResumeSessionRequest),
     }
+
+    /// Request the runner start Firefox.
+    ///
+    /// Sent once the recorder has started ffmpeg.
+    pub struct StartFirefox;
+
+    /// Request the runner to stop Firefox.
+    ///
+    /// Send once the recorder has finished recording.
+    pub struct StopFirefox;
 }
 
 message_type! {
@@ -195,6 +205,21 @@ message_type! {
 
     /// The status of the WaitForIdle phase.
     pub struct WaitForIdle {
+        pub result: ForeignResult<()>,
+    }
+
+    /// The status of the StartFirefox phase.
+    pub struct StartedFirefox {
+        pub result: ForeignResult<()>,
+    }
+
+    /// The status of the StopFirefox phase.
+    pub struct StoppedFirefox {
+        pub result: Result<(), Vec<ErrorMessage<String>>>,
+    }
+
+    /// The status of any cleanup or teardown before the session finishes.
+    pub struct SessionFinished {
         pub result: ForeignResult<()>,
     }
 }

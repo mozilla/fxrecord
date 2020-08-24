@@ -12,6 +12,7 @@ use libfxrunner::config::Config;
 use libfxrunner::osapi::{WindowsPerfProvider, WindowsShutdownProvider};
 use libfxrunner::proto::RunnerProto;
 use libfxrunner::session::DefaultSessionManager;
+use libfxrunner::splash::WindowsSplash;
 use libfxrunner::taskcluster::FirefoxCi;
 use slog::{error, info, warn, Logger};
 use structopt::StructOpt;
@@ -83,8 +84,9 @@ async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), B
             let (stream, addr) = listener.accept().await?;
             info!(log, "Received connection"; "peer" => addr);
 
-            let result = RunnerProto::handle_request(
+            let result = RunnerProto::<_, _, _, _, WindowsSplash>::handle_request(
                 log.clone(),
+                config.display_size,
                 stream,
                 shutdown_provider(&options),
                 FirefoxCi::default(),
