@@ -5,15 +5,21 @@
 use std::convert::TryFrom;
 use std::ffi::c_void;
 use std::io;
-use std::ptr::{null, null_mut};
+use std::ptr::null_mut;
 
-use winapi::um::handleapi;
+use winapi::shared::winerror;
+use winapi::um::processsnapshot::{HPSS, HPSSWALK, HPSSWALK__, HPSS__};
 use winapi::um::winnt::HANDLE;
-
-use crate::osapi::error::check_nonzero;
+use winapi::um::{handleapi, processsnapshot, processthreadsapi};
 
 /// A HANDLE that is closed when dropped.
 pub type Handle = AutoClosingHandle<c_void>;
+
+/// A HPSS that is freed when dropped.
+///
+/// It is only safe to use for snapshots captured by the current process.
+pub type ProcessSnapshot = AutoClosingHandle<HPSS__>;
+pub type ProcessSnapshotWalkMarker = AutoClosingHandle<HPSSWALK__>;
 
 pub struct AutoClosingHandle<T>(*mut T)
 where
@@ -30,6 +36,26 @@ impl ClosableHandle for HANDLE {
         if !self.is_null() {
             let rv = unsafe { handleapi::CloseHandle(*self) };
             assert!(rv != 0);
+        }
+    }
+}
+
+impl ClosableHandle for HPSS {
+    fn close(&mut self) {
+        if !self.is_null() {
+            let rv = unsafe {
+                processsnapshot::PssFreeSnapshot(processthreadsapi::GetCurrentProcess(), *self)
+            };
+            assert!(rv == winerror::ERROR_SUCCESS);
+        }
+    }
+}
+
+impl ClosableHandle for HPSSWALK {
+    fn close(&mut self) {
+        if !self.is_null() {
+            let rv = unsafe { processsnapshot::PssWalkMarkerFree(*self) };
+            assert!(rv == winerror::ERROR_SUCCESS);
         }
     }
 }

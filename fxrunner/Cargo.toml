@@ -49,6 +49,7 @@ features = [
 [dependencies.winapi]
 version = "0.3.9"
 features = [
+    "basetsd",
     "errhandlingapi",
     "fileapi",
     "handleapi",
@@ -56,6 +57,7 @@ features = [
     "ioapiset",
     "libloaderapi",
     "processthreadsapi",
+    "processsnapshot",
     "securitybaseapi",
     "std",
     "winbase",

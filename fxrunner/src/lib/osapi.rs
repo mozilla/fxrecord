@@ -15,6 +15,7 @@ use tokio::time::delay_for;
 pub mod error;
 pub mod handle;
 mod perf;
+pub mod process;
 mod shutdown;
 
 pub use perf::IoCounters;
