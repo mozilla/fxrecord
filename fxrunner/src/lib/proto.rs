@@ -102,7 +102,7 @@ where
         assert!(firefox_bin.is_file_async().await);
 
         if let Err(e) = self.disable_updates(&session_info).await {
-            error!(self.log, "Could not disable updates for downloaded Firefox"; "error" => ?e);
+            error!(self.log, "Could not disable updates for downloaded Firefox"; "error" => %e);
             self.send(DisableUpdates {
                 result: Err(e.into_error_message()),
             })
