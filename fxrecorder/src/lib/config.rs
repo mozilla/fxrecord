@@ -46,14 +46,15 @@ pub struct RecordingConfig {
     /// The output size of the video.
     ///
     /// If provided, the video will be scaled to this size. Otherwise, the video
-    /// will be the size recoreded in [`video_size`](struct.CaptureConfig.html#structfield.video_size).CaptureConfig
+    /// will be the size recorded in
+    /// [`video_size`](struct.CaptureConfig.html#structfield.video_size).CaptureConfig
     ///
     /// This is used to generate the `-vf` argument to `ffmpeg`.
     pub output_size: Option<Size>,
 
     /// The buffer size to use when recording.
     ///
-    /// This corresponds to the `-rtbuffersize` argument to `ffmpeg`.
+    /// This corresponds to the `-rtbufsize` argument to `ffmpeg`.
     pub buffer_size: String,
 }
 
@@ -61,7 +62,7 @@ pub struct RecordingConfig {
 #[derive(Copy, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct Size {
     /// The size in the y dimension.
-    y: u16,
+    pub y: u16,
     /// The size in the x dimension.
-    x: u16,
+    pub x: u16,
 }
