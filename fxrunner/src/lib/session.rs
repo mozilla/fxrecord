@@ -25,6 +25,15 @@ pub struct SessionInfo<'a> {
     pub path: PathBuf,
 }
 
+impl<'a> SessionInfo<'a> {
+    pub fn firefox_path(&self) -> PathBuf {
+        self.path.join("firefox").join("firefox.exe")
+    }
+    pub fn profile_path(&self) -> PathBuf {
+        self.path.join("profile")
+    }
+}
+
 /// A trait for creating and validating session.
 #[async_trait]
 pub trait SessionManager {
@@ -133,16 +142,14 @@ impl SessionManager for DefaultSessionManager {
 
         let cleanup = guard(self.log.clone(), |log| cleanup_session(log, &session_info));
 
-        if !session_info.path.join("profile").is_dir_async().await {
+        if !session_info.profile_path().is_dir_async().await {
             return Err(ResumeSessionError {
                 kind: ResumeSessionErrorKind::MissingProfile,
                 session_id: session_id.into(),
             });
         }
 
-        let firefox_path = session_info.path.join("firefox");
-        let bin_path = firefox_path.join("firefox.exe");
-        if !firefox_path.is_dir_async().await || !bin_path.is_file_async().await {
+        if !session_info.firefox_path().is_file_async().await {
             return Err(ResumeSessionError {
                 kind: ResumeSessionErrorKind::MissingFirefox,
                 session_id: session_id.into(),

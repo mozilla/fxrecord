@@ -112,10 +112,13 @@ async fn test_new_session_ok() {
             assert_eq!(result.unwrap(), true);
 
             let session_info = session_info.unwrap();
-            let firefox_dir = session_info.path.join("firefox");
-            assert!(firefox_dir.join("firefox.exe").is_file());
+            assert!(session_info.firefox_path().is_file());
 
-            let dist_path = firefox_dir.join("distribution");
+            let dist_path = session_info
+                .firefox_path()
+                .parent()
+                .unwrap()
+                .join("distribution");
             assert!(dist_path.is_dir());
             let policies: Value = {
                 let f = File::open(dist_path.join("policies.json")).unwrap();
@@ -131,7 +134,7 @@ async fn test_new_session_ok() {
                 })
             );
 
-            let profile_dir = session_info.path.join("profile");
+            let profile_dir = session_info.profile_path();
             assert!(profile_dir.is_dir());
             assert!(directory_is_empty(&profile_dir));
         },
@@ -160,13 +163,9 @@ async fn test_new_session_ok() {
             assert_eq!(result.unwrap(), true);
 
             let session_info = session_info.unwrap();
-            assert!(session_info
-                .path
-                .join("firefox")
-                .join("firefox.exe")
-                .is_file());
+            assert!(session_info.firefox_path().is_file());
 
-            let profile_dir = session_info.path.join("profile");
+            let profile_dir = session_info.profile_path();
             assert_populated_profile(&profile_dir);
             assert_file_contents_eq(&profile_dir.join("user.js"), "");
         },
@@ -205,13 +204,9 @@ async fn test_new_session_ok() {
             assert_eq!(result.unwrap(), true);
 
             let session_info = session_info.unwrap();
-            assert!(session_info
-                .path
-                .join("firefox")
-                .join("firefox.exe")
-                .is_file());
+            assert!(session_info.firefox_path().is_file());
 
-            let profile_dir = session_info.path.join("profile");
+            let profile_dir = session_info.profile_path();
             assert_populated_profile(dbg!(&profile_dir));
             assert_file_contents_eq(
                 &profile_dir.join("user.js"),
@@ -258,13 +253,9 @@ async fn test_new_session_ok() {
             assert_eq!(result.unwrap(), true);
 
             let session_info = session_info.unwrap();
-            assert!(session_info
-                .path
-                .join("firefox")
-                .join("firefox.exe")
-                .is_file());
+            assert!(session_info.firefox_path().is_file());
 
-            let profile_dir = session_info.path.join("profile");
+            let profile_dir = session_info.profile_path();
             assert_file_contents_eq(
                 &profile_dir.join("user.js"),
                 indoc!(
