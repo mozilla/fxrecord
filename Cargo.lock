@@ -474,6 +474,7 @@ dependencies = [
 name = "fxrecorder"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "libfxrecord",
  "serde",
  "slog",
