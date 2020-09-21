@@ -18,7 +18,7 @@ use libfxrunner::taskcluster::Taskcluster;
 use tempfile::TempDir;
 use tokio::fs;
 
-use crate::util::{test_dir, touch, AssertInvoked};
+use crate::util::{firefox_zip_path, test_dir, AssertInvoked};
 
 /// The only valid session ID for TestSessionManager.
 pub const VALID_SESSION_ID: &str = "REQUESTID";
@@ -80,7 +80,7 @@ impl Taskcluster for TestTaskcluster {
             }
             Some(TaskclusterFailureMode::BadZip) => test_dir().join("test.zip"),
             Some(TaskclusterFailureMode::NotZip) => test_dir().join("README.md"),
-            None => test_dir().join("firefox.zip"),
+            None => firefox_zip_path(),
         };
 
         let dest = download_dir.join("firefox.zip");
@@ -289,12 +289,8 @@ impl SessionManager for TestSessionManager {
         fs::create_dir(&session_info.path.join("profile"))
             .await
             .unwrap();
-        fs::create_dir(&session_info.path.join("firefox"))
-            .await
-            .unwrap();
-        touch(&session_info.path.join("firefox").join("firefox.exe"))
-            .await
-            .unwrap();
+
+        libfxrunner::zip::unzip(&firefox_zip_path(), &session_info.path).unwrap();
 
         *self.handle.last_session_info.lock().unwrap() = Some(session_info.clone());
         Ok(session_info)

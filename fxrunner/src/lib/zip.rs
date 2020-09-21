@@ -167,19 +167,6 @@ mod test {
         }
 
         {
-            let zip = test_dir.join("firefox.zip");
-            let tempdir = TempDir::new().unwrap();
-
-            let stats = unzip(&zip, tempdir.path()).unwrap();
-
-            let firefox_dir = tempdir.path().join("firefox");
-            assert!(firefox_dir.join("firefox.exe").is_file());
-
-            assert_eq!(stats.extracted, 1);
-            assert_eq!(stats.top_level_dir, Some(PathBuf::from("firefox")));
-        }
-
-        {
             let zip = test_dir.join("profile.zip");
             let tempdir = TempDir::new().unwrap();
 

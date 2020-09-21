@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "fakefox",
     "fxrecorder",
     "fxrunner",
     "libfxrecord",

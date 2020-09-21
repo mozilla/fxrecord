@@ -2,11 +2,6 @@
 
 This directory contains artifacts used for testing.
 
-## firefox.zip
-
-This is a sample build artifact containing a "Firefox executable" (an empty
-file) used for mocking Taskcluster responses.
-
 ## profile.zip
 
 This file is a sample profile containing some files present in Firefox

@@ -3,7 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use std::fs::File;
-use std::io::{self, Read};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 /// A test helper that is used to assert an operation either occurred or did not
@@ -50,6 +50,11 @@ pub fn test_dir() -> PathBuf {
         .join("test")
 }
 
+/// Return the path of the build-generated `firefox.zip`.
+pub fn firefox_zip_path() -> PathBuf {
+    PathBuf::from(env!("OUT_DIR")).join("firefox.zip")
+}
+
 pub fn directory_is_empty(path: &Path) -> bool {
     path.read_dir()
         .unwrap()
@@ -79,13 +84,4 @@ pub fn assert_file_contents_eq(path: &Path, expected: &'static str) {
         buf
     };
     assert_eq!(contents, expected);
-}
-
-pub async fn touch(path: &Path) -> Result<(), io::Error> {
-    tokio::fs::OpenOptions::new()
-        .create(true)
-        .write(true)
-        .open(path)
-        .await
-        .map(drop)
 }

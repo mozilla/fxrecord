@@ -1,0 +1,13 @@
+[package]
+name = "fakefox"
+version = "0.1.0"
+authors = ["barret Rennie <barret@mozilla.com>"]
+edition = "2018"
+license = "MPL-2.0"
+
+[[bin]]
+name = "fakefox"
+path = "src/main.rs"
+
+[dependencies]
+structopt = "0.3.17"
