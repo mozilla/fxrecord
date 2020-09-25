@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+mod logging;
 mod mocks;
 mod util;
 
@@ -22,18 +23,11 @@ use libfxrunner::session::{
 };
 use libfxrunner::zip::ZipError;
 use serde_json::{json, Value};
-use slog::Logger;
 use tokio::net::{TcpListener, TcpStream};
 
+use crate::logging::build_test_loggers;
 use crate::mocks::*;
 use crate::util::*;
-
-/// Generate a logger for testing.
-///
-/// The generated logger discards all messages.
-fn test_logger() -> Logger {
-    Logger::root(slog::Discard, slog::o! {})
-}
 
 type TestRunnerProto = RunnerProto<
     TestShutdownProvider,
@@ -68,13 +62,15 @@ async fn run_proto_test<'a, Fut>(
 {
     let addr = listener.local_addr().unwrap();
 
+    let (runner_logger, recorder_logger) = build_test_loggers();
+
     let runner = async {
         let (stream, _) = listener.accept().await.unwrap();
 
         let handle = session_manager.handle();
 
         let result = TestRunnerProto::handle_request(
-            test_logger(),
+            runner_logger,
             DISPLAY_SIZE,
             stream,
             shutdown_provider,
@@ -92,7 +88,7 @@ async fn run_proto_test<'a, Fut>(
 
     let recorder = async {
         let stream = TcpStream::connect(&addr).await.unwrap();
-        let proto = TestRecorderProto::new(test_logger(), stream, TestRecorder);
+        let proto = TestRecorderProto::new(recorder_logger, stream, TestRecorder);
 
         recorder_fn(proto).await;
     };

@@ -689,6 +689,7 @@ dependencies = [
  "reqwest",
  "serde_json",
  "slog",
+ "slog-term",
  "tempfile",
  "tokio",
  "url",

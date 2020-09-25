@@ -100,3 +100,17 @@ host = "0.0.0.0:8888"
 ```
 
 An [example configuration](fxrecord.example.toml) is provided.
+
+## Testing
+
+To run the unit tests, run `cargo test`.
+
+The integration tests support logging, but by default cargo captures test
+output and runs tests in parallel. To have logs associated with tests
+clearly, run:
+
+```sh
+cargo test -p integration-tests -- --nocapture --test-threads 1
+```
+
+to force unit tests to run sequentially.
