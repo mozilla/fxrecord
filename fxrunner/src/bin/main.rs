@@ -5,9 +5,11 @@
 use std::error::Error;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::process::exit;
 use std::time::Duration;
 
-use libfxrecord::{run, CommonOptions};
+use libfxrecord::config::read_config;
+use libfxrecord::logging::build_logger;
 use libfxrunner::config::Config;
 use libfxrunner::osapi::{WindowsPerfProvider, WindowsShutdownProvider};
 use libfxrunner::proto::RunnerProto;
@@ -53,17 +55,22 @@ impl Options {
     }
 }
 
-impl CommonOptions for Options {
-    fn config_path(&self) -> &Path {
-        &self.config_path
+#[tokio::main]
+async fn main() {
+    let options = Options::from_args();
+    let log = build_logger();
+    info!(log, "read command-line options"; "options" => ?options);
+
+    if let Err(e) = fxrunner(log.clone(), options).await {
+        error!(log, "unexpected error"; "error" => %e);
+        drop(log);
+        exit(1);
     }
 }
 
-fn main() {
-    run::<Options, Config, _, _>(fxrunner, "fxrunner");
-}
+async fn fxrunner(log: Logger, options: Options) -> Result<(), Box<dyn Error>> {
+    let config: Config = read_config(&options.config_path, "fxrunner")?;
 
-async fn fxrunner(log: Logger, options: Options, config: Config) -> Result<(), Box<dyn Error>> {
     if let Err(e) = create_dir_all(&config.session_dir).await {
         error!(
             log,

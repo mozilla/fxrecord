@@ -3,13 +3,15 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use std::error::Error;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+use std::process::exit;
 use std::time::Duration;
 
+use libfxrecord::config::read_config;
 use libfxrecord::error::ErrorMessage;
+use libfxrecord::logging::build_logger;
 use libfxrecord::net::Idle;
 use libfxrecord::prefs::{parse_pref, PrefValue};
-use libfxrecord::{run, CommonOptions};
 use libfxrecorder::config::Config;
 use libfxrecorder::proto::RecorderProto;
 use libfxrecorder::recorder::FfmpegRecorder;
@@ -46,25 +48,23 @@ struct Options {
     skip_idle: bool,
 }
 
-impl CommonOptions for Options {
-    fn config_path(&self) -> &Path {
-        &self.config_path
+#[tokio::main]
+async fn main() {
+    let options = Options::from_args();
+    let log = build_logger();
+    info!(log, "read command-line options"; "options" => ?options);
+
+    if let Err(e) = fxrecorder(log.clone(), options).await {
+        error!(log, "unexpected error"; "error" => %e);
+        drop(log);
+        exit(1);
     }
 }
 
-fn main() {
-    run::<Options, Config, _, _>(fxrecorder, "fxrecorder");
-}
+async fn fxrecorder(log: Logger, options: Options) -> Result<(), Box<dyn Error>> {
+    let config: Config = read_config(&options.config_path, "fxrecorder")?;
 
-async fn fxrecorder(log: Logger, options: Options, config: Config) -> Result<(), Box<dyn Error>> {
-    let Options {
-        task_id,
-        profile_path,
-        prefs,
-        ..
-    } = options;
-
-    if let Some(ref profile_path) = profile_path {
+    if let Some(ref profile_path) = &options.profile_path {
         let meta = tokio::fs::metadata(profile_path).await?;
 
         if !meta.is_file() {
@@ -85,7 +85,11 @@ async fn fxrecorder(log: Logger, options: Options, config: Config) -> Result<(),
         );
 
         proto
-            .new_session(&task_id, profile_path.as_deref(), prefs)
+            .new_session(
+                &options.task_id,
+                options.profile_path.as_deref(),
+                options.prefs,
+            )
             .await?
     };
 
