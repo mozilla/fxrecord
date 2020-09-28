@@ -6,7 +6,10 @@ use slog::{Drain, Logger};
 
 /// Create a logger.
 pub fn build_logger() -> Logger {
-    let decorator = slog_term::PlainDecorator::new(std::io::stdout());
+    let decorator = slog_term::TermDecorator::new()
+        .stdout()
+        .force_plain()
+        .build();
     let drain = slog_term::FullFormat::new(decorator)
         .use_original_order()
         .use_utc_timestamp()
