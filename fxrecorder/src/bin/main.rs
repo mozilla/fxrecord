@@ -21,12 +21,30 @@ use structopt::StructOpt;
 use tokio::net::TcpStream;
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "fxrecorder", about = "Start FxRecorder")]
+#[structopt(name = "fxrecorder")]
+/// Record and analyze videos of Firefox desktop startup.
 struct Options {
     /// The configuration file to use.
     #[structopt(long = "config", default_value = "fxrecord.toml")]
     config_path: PathBuf,
 
+    #[structopt(subcommand)]
+    command: Command,
+}
+
+#[derive(Debug, StructOpt)]
+enum Command {
+    /// Connect to an FxRunner instance and record a video.
+    ///
+    /// Analysis will be run on the captured video.
+    Record(RecordOptions),
+
+    /// Analyze a recorded video and compute visual metrics.
+    Analyze(AnalyzeOptions),
+}
+
+#[derive(Debug, StructOpt)]
+struct RecordOptions {
     /// The ID of a build task that will be used by the runner.
     task_id: String,
 
@@ -48,22 +66,39 @@ struct Options {
     skip_idle: bool,
 }
 
-#[tokio::main]
-async fn main() {
-    let options = Options::from_args();
+#[derive(Debug, StructOpt)]
+struct AnalyzeOptions {
+    video_path: PathBuf,
+}
+
+fn main() {
     let log = build_logger();
+
+    let options = Options::from_args();
     info!(log, "read command-line options"; "options" => ?options);
 
-    if let Err(e) = fxrecorder(log.clone(), options).await {
+    let status = || -> Result<_, Box<dyn Error>> {
+        let config: Config = read_config(&options.config_path, "fxrecorder")?;
+
+        match options.command {
+            Command::Record(record_options) => record(log.clone(), config, record_options)?,
+            Command::Analyze(analyze_options) => {
+                analyze_video(log.clone(), config, analyze_options)?
+            }
+        }
+
+        Ok(())
+    }();
+
+    if let Err(e) = status {
         error!(log, "unexpected error"; "error" => %e);
         drop(log);
         exit(1);
     }
 }
 
-async fn fxrecorder(log: Logger, options: Options) -> Result<(), Box<dyn Error>> {
-    let config: Config = read_config(&options.config_path, "fxrecorder")?;
-
+#[tokio::main]
+async fn record(log: Logger, config: Config, options: RecordOptions) -> Result<(), Box<dyn Error>> {
     if let Some(ref profile_path) = &options.profile_path {
         let meta = tokio::fs::metadata(profile_path).await?;
 
@@ -128,6 +163,16 @@ async fn fxrecorder(log: Logger, options: Options) -> Result<(), Box<dyn Error>>
         };
         proto.resume_session(&session_id, idle).await?;
     }
+
+    Ok(())
+}
+
+fn analyze_video(
+    log: Logger,
+    _config: Config,
+    options: AnalyzeOptions,
+) -> Result<(), Box<dyn Error>> {
+    info!(log, "analyzing video"; "video" => &options.video_path.display());
 
     Ok(())
 }
