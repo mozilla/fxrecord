@@ -145,7 +145,10 @@ fn ensure_window_class_registered(instance: HINSTANCE) -> Result<(), io::Error> 
     }
 
     // This handle does not need to be freed.
-    let brush = check_nonnull(unsafe { wingdi::CreateSolidBrush(wingdi::RGB(255, 0, 0)) })?;
+    //
+    // The colour is here is a specific shade of orange, which is expected by
+    // visualmetrics.py.
+    let brush = check_nonnull(unsafe { wingdi::CreateSolidBrush(wingdi::RGB(222, 100, 13)) })?;
 
     // This handle does not need to be freed.
     let cursor = check_nonnull(unsafe { winuser::LoadCursorW(null_mut(), winuser::IDC_ARROW) })?;
