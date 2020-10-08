@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use std::env::current_dir;
 use std::error::Error;
 use std::path::PathBuf;
 use std::process::exit;
@@ -18,6 +19,7 @@ use libfxrecorder::recorder::FfmpegRecorder;
 use libfxrecorder::retry::delayed_exponential_retry;
 use slog::{error, info, Logger};
 use structopt::StructOpt;
+use tempfile::TempDir;
 use tokio::net::TcpStream;
 
 #[derive(Debug, StructOpt)]
@@ -64,6 +66,10 @@ struct RecordOptions {
     /// Do not require the runner to become idle before running Firefox.
     #[structopt(long)]
     skip_idle: bool,
+
+    /// Do not delete the video after analysis.
+    #[structopt(long = "keep-video")]
+    keep_video: bool,
 }
 
 #[derive(Debug, StructOpt)]
@@ -99,6 +105,8 @@ fn main() {
 
 #[tokio::main]
 async fn record(log: Logger, config: Config, options: RecordOptions) -> Result<(), Box<dyn Error>> {
+    let tempdir = TempDir::new().expect("could not create temp directory");
+
     if let Some(ref profile_path) = &options.profile_path {
         let meta = tokio::fs::metadata(profile_path).await?;
 
@@ -130,7 +138,7 @@ async fn record(log: Logger, config: Config, options: RecordOptions) -> Result<(
 
     info!(log, "Disconnected from runner. Waiting to reconnect...");
 
-    {
+    let recording_path = {
         let reconnect = || {
             info!(log, "Attempting re-connection to runner...");
             TcpStream::connect(&config.host)
@@ -161,7 +169,22 @@ async fn record(log: Logger, config: Config, options: RecordOptions) -> Result<(
         } else {
             Idle::Wait
         };
-        proto.resume_session(&session_id, idle).await?;
+
+        let recording_dir = if options.keep_video {
+            current_dir()?
+        } else {
+            tempdir.path().into()
+        };
+
+        proto
+            .resume_session(&session_id, idle, &recording_dir)
+            .await?
+    };
+
+    info!(log, "disconnected from FxRunner");
+
+    if options.keep_video {
+        info!(log, "video written to disk"; "path" => recording_path.display());
     }
 
     Ok(())

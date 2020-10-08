@@ -9,6 +9,7 @@ mod util;
 use std::convert::TryInto;
 use std::fs::File;
 use std::future::Future;
+use std::path::PathBuf;
 
 use assert_matches::assert_matches;
 use futures::join;
@@ -23,6 +24,7 @@ use libfxrunner::session::{
 };
 use libfxrunner::zip::ZipError;
 use serde_json::{json, Value};
+use tempfile::TempDir;
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::logging::build_test_loggers;
@@ -55,7 +57,7 @@ async fn run_proto_test<'a, Fut>(
     tc: TestTaskcluster,
     perf_provider: TestPerfProvider,
     session_manager: TestSessionManager,
-    recorder_fn: impl FnOnce(TestRecorderProto) -> Fut,
+    recorder_fn: impl FnOnce(TestRecorderProto, PathBuf) -> Fut,
     runner_fn: impl FnOnce(RunnerInfo),
 ) where
     Fut: Future<Output = ()>,
@@ -89,8 +91,10 @@ async fn run_proto_test<'a, Fut>(
     let recorder = async {
         let stream = TcpStream::connect(&addr).await.unwrap();
         let proto = TestRecorderProto::new(recorder_logger, stream, TestRecorder);
+        let tempdir = TempDir::new().expect("could not create tempdir for run_proto_test");
 
-        recorder_fn(proto).await;
+        // Pass a PathBuf to work around lifetime issues of closures.
+        recorder_fn(proto, tempdir.path().into()).await;
     };
 
     join!(runner, recorder);
@@ -106,7 +110,7 @@ async fn test_new_session_ok() {
         TestTaskcluster::default(),
         TestPerfProvider::default(),
         TestSessionManager::default(),
-        |mut recorder| async move {
+        |mut recorder, _tempdir| async move {
             assert_eq!(
                 recorder.new_session("task_id", None, vec![]).await.unwrap(),
                 VALID_SESSION_ID
@@ -154,7 +158,7 @@ async fn test_new_session_ok() {
         TestTaskcluster::default(),
         TestPerfProvider::default(),
         TestSessionManager::default(),
-        |mut recorder| async move {
+        |mut recorder, _tempdir| async move {
             assert_eq!(
                 recorder
                     .new_session("task_id", Some(&test_dir().join("profile.zip")), vec![])
@@ -185,7 +189,7 @@ async fn test_new_session_ok() {
         TestTaskcluster::default(),
         TestPerfProvider::default(),
         TestSessionManager::default(),
-        |mut recorder| async move {
+        |mut recorder, _tempdir| async move {
             let session_id = recorder
                 .new_session(
                     "task_id",
@@ -234,7 +238,7 @@ async fn test_new_session_ok() {
         TestTaskcluster::default(),
         TestPerfProvider::default(),
         TestSessionManager::default(),
-        |mut recorder| async move {
+        |mut recorder, _tempdir| async move {
             let session_id = recorder
                 .new_session(
                     "task_id",
@@ -289,7 +293,7 @@ async fn test_new_session_err_request_manager() {
         TestSessionManager::with_failure(SessionFailureMode::NewSession(
             NewSessionError::TooManyAttempts(32),
         )),
-        |mut recorder| async move {
+        |mut recorder, _tempdir| async move {
             assert_matches!(
                 recorder.new_session("task_id", None, vec![]).await.unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -321,7 +325,7 @@ async fn test_new_session_err_request_manager() {
         TestSessionManager::with_failure(SessionFailureMode::EnsureProfileDir(
             "could not ensure profile directory",
         )),
-        |mut recorder| async move {
+        |mut recorder, _tempdir| async move {
             assert_matches!(
                 recorder.new_session("task_id", None, vec![]).await.unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -360,7 +364,7 @@ async fn test_new_session_err_downloadbuild() {
         TestTaskcluster::with_failure(TaskclusterFailureMode::BadZip),
         TestPerfProvider::default(),
         TestSessionManager::default(),
-        |mut recorder| async move {
+        |mut recorder, _tempdir| async move {
             assert_matches!(
                 recorder
                     .new_session("task_id", None, vec![])
@@ -391,7 +395,7 @@ async fn test_new_session_err_downloadbuild() {
         TestTaskcluster::with_failure(TaskclusterFailureMode::Generic("404 Not Found")),
         TestPerfProvider::default(),
         TestSessionManager::default(),
-        |mut recorder| async move {
+        |mut recorder, _tempdir| async move {
             assert_matches!(
                 recorder
                     .new_session("task_id", None, vec![])
@@ -427,7 +431,7 @@ async fn test_new_session_err_downloadbuild() {
         TestPerfProvider::default(),
 
         TestSessionManager::default(),
-        |mut recorder| async move {
+        |mut recorder, _tempdir| async move {
             assert_matches!(
                 recorder
                     .new_session("task_id", None, vec![])
@@ -475,7 +479,7 @@ async fn test_new_session_err_recvprofile() {
         TestPerfProvider::default(),
 
         TestSessionManager::default(),
-        |mut recorder| async move {
+        |mut recorder, _tempdir| async move {
             assert_matches!(
                 recorder
                     .new_session("task_id", Some(&test_dir().join("README.md")), vec![])
@@ -518,7 +522,7 @@ async fn test_new_session_err_recvprofile() {
         TestTaskcluster::default(),
         TestPerfProvider::default(),
         TestSessionManager::default(),
-        |mut recorder| async move {
+        |mut recorder, _tempdir| async move {
             assert_matches!(
                 recorder
                     .new_session("task_id", Some(&test_dir().join("empty.zip")), vec![])
@@ -552,7 +556,7 @@ async fn test_new_session_err_restarting() {
         TestTaskcluster::default(),
         TestPerfProvider::default(),
         TestSessionManager::default(),
-        |mut recorder| async move {
+        |mut recorder, _tempdir| async move {
             assert_matches!(
                 recorder.new_session("task_id", None, vec![])
                     .await
@@ -590,9 +594,9 @@ async fn test_resume_session_ok() {
         TestTaskcluster::default(),
         TestPerfProvider::asserting_invoked(),
         TestSessionManager::default(),
-        |mut recorder| async move {
+        |mut recorder, tempdir| async move {
             recorder
-                .resume_session(VALID_SESSION_ID, Idle::Wait)
+                .resume_session(VALID_SESSION_ID, Idle::Wait, &tempdir)
                 .await
                 .unwrap();
         },
@@ -612,9 +616,9 @@ async fn test_resume_session_ok() {
         TestTaskcluster::default(),
         TestPerfProvider::asserting_not_invoked(),
         TestSessionManager::default(),
-        |mut recorder| async move {
+        |mut recorder, tempdir| async move {
             recorder
-                .resume_session(VALID_SESSION_ID, Idle::Skip)
+                .resume_session(VALID_SESSION_ID, Idle::Skip, &tempdir)
                 .await
                 .unwrap();
         },
@@ -639,10 +643,10 @@ async fn test_resume_session_err_request_manager() {
         TestTaskcluster::default(),
         TestPerfProvider::default(),
         TestSessionManager::default(),
-        |mut recorder| async move {
+        |mut recorder, tempdir| async move {
             assert_matches!(
                 // Any request that is not VALID_REQUEST_ID triggers this error.
-                recorder.resume_session("foobar", Idle::Skip).await.unwrap_err(),
+                recorder.resume_session("foobar", Idle::Skip, &tempdir).await.unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
                     assert_eq!(e.to_string(), "Invalid session ID `foobar': ID contains invalid characters");
                 }
@@ -675,10 +679,10 @@ async fn test_resume_session_err_request_manager() {
         TestSessionManager::with_failure(SessionFailureMode::ResumeSession(
             ResumeSessionErrorKind::MissingProfile,
         )),
-        |mut recorder| async move {
+        |mut recorder, tempdir| async move {
             assert_matches!(
                 recorder
-                    .resume_session(VALID_SESSION_ID, Idle::Skip)
+                    .resume_session(VALID_SESSION_ID, Idle::Skip, &tempdir)
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -722,10 +726,10 @@ async fn test_resume_session_err_waitforidle() {
         TestTaskcluster::default(),
         TestPerfProvider::with_failure(PerfFailureMode::DiskIoError("disk io error")),
         TestSessionManager::default(),
-        |mut recorder| async move {
+        |mut recorder, tempdir| async move {
             assert_matches!(
                 recorder
-                    .resume_session(VALID_SESSION_ID, Idle::Wait)
+                    .resume_session(VALID_SESSION_ID, Idle::Wait, &tempdir)
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -758,10 +762,10 @@ async fn test_resume_session_err_waitforidle() {
         TestTaskcluster::default(),
         TestPerfProvider::with_failure(PerfFailureMode::CpuTimeError("cpu time error")),
         TestSessionManager::default(),
-        |mut recorder| async move {
+        |mut recorder, tempdir| async move {
             assert_matches!(
                 recorder
-                    .resume_session(VALID_SESSION_ID, Idle::Wait)
+                    .resume_session(VALID_SESSION_ID, Idle::Wait, &tempdir)
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -793,10 +797,10 @@ async fn test_resume_session_err_waitforidle() {
         TestTaskcluster::default(),
         TestPerfProvider::with_failure(PerfFailureMode::DiskNeverIdle),
         TestSessionManager::default(),
-        |mut recorder| async move {
+        |mut recorder, tempdir| async move {
             assert_matches!(
                 recorder
-                    .resume_session(VALID_SESSION_ID, Idle::Wait)
+                    .resume_session(VALID_SESSION_ID, Idle::Wait, &tempdir)
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -826,10 +830,10 @@ async fn test_resume_session_err_waitforidle() {
         TestTaskcluster::default(),
         TestPerfProvider::with_failure(PerfFailureMode::CpuNeverIdle),
         TestSessionManager::default(),
-        |mut recorder| async move {
+        |mut recorder, tempdir| async move {
             assert_matches!(
                 recorder
-                    .resume_session(VALID_SESSION_ID, Idle::Wait)
+                    .resume_session(VALID_SESSION_ID, Idle::Wait, &tempdir)
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {

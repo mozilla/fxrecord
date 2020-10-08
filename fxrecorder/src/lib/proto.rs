@@ -5,13 +5,12 @@
 use std::error::Error;
 use std::fmt::Debug;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use libfxrecord::error::ErrorMessage;
 use libfxrecord::net::*;
 use libfxrecord::prefs::PrefValue;
 use slog::{error, info, warn, Logger};
-use tempfile::TempDir;
 use thiserror::Error;
 use tokio::fs::File;
 use tokio::net::TcpStream;
@@ -130,9 +129,8 @@ where
         &mut self,
         session_id: &str,
         idle: Idle,
-    ) -> Result<(), RecorderProtoError<R::Error>> {
-        let tmpdir = TempDir::new().expect("could not create temporary directory");
-
+        directory: &Path,
+    ) -> Result<PathBuf, RecorderProtoError<R::Error>> {
         info!(self.log, "Resuming session");
         self.send::<Session>(
             ResumeSessionRequest {
@@ -167,7 +165,7 @@ where
         info!(self.log, "Beginning recording...");
         let handle = self
             .recorder
-            .start_recording(tmpdir.path())
+            .start_recording(directory)
             .await
             .map_err(RecorderProtoError::Recording)?;
 
@@ -213,13 +211,9 @@ where
             warn!(self.log, "runner did not clean up successfully"; "error" => ?e);
         }
 
-        info!(
-            self.log,
-            "recorded firefox";
-            "path" => %recording_path.display(),
-        );
+        info!(self.log, "recording complete");
 
-        Ok(())
+        Ok(recording_path)
     }
 
     /// Send the profile at the given path to the runner.
