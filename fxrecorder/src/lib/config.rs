@@ -13,6 +13,9 @@ pub struct Config {
     /// The address of the `fxrunner` to connect to.
     pub host: SocketAddr,
 
+    /// The path to the `visualmetrics.py` script.
+    pub visual_metrics_path: PathBuf,
+
     /// The recording configuraton.
     pub recording: RecordingConfig,
 }

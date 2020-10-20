@@ -7,3 +7,6 @@ pub mod error;
 pub mod logging;
 pub mod net;
 pub mod prefs;
+
+/// The shade of orange visualmetrics.p; expects for pre-recording frames.
+pub const ORANGE: [u8; 3] = [222, 100, 13];

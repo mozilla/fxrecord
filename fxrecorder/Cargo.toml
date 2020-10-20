@@ -16,12 +16,19 @@ path = "src/bin/main.rs"
 [dependencies]
 async-trait = "0.1.36"
 libfxrecord = { path = "../libfxrecord" }
+itertools = "0.9.0"
 serde = { version = "1.0.110", features = ["derive"] }
+serde_json = "1.0.59"
 slog = "2.5.2"
 structopt = "0.3.14"
 tempfile = "3.1.0"
 thiserror = "1.0.20"
 toml = "0.5.6"
+
+[dependencies.image]
+version = "0.23.10"
+default-features = false
+features = ["png"]
 
 [dependencies.tokio]
 version = "0.2.21"

@@ -13,6 +13,7 @@ use libfxrecord::error::ErrorMessage;
 use libfxrecord::logging::build_logger;
 use libfxrecord::net::Idle;
 use libfxrecord::prefs::{parse_pref, PrefValue};
+use libfxrecorder::analysis::{compute_visual_metrics, crop_video, VisualMetrics};
 use libfxrecorder::config::Config;
 use libfxrecorder::proto::RecorderProto;
 use libfxrecorder::recorder::FfmpegRecorder;
@@ -46,6 +47,7 @@ enum Command {
 }
 
 #[derive(Debug, StructOpt)]
+/// Record a video from FxRunner and perform analysis.
 struct RecordOptions {
     /// The ID of a build task that will be used by the runner.
     task_id: String,
@@ -83,28 +85,39 @@ fn main() {
     let options = Options::from_args();
     info!(log, "read command-line options"; "options" => ?options);
 
-    let status = || -> Result<_, Box<dyn Error>> {
+    let metrics = || -> Result<VisualMetrics, Box<dyn Error>> {
         let config: Config = read_config(&options.config_path, "fxrecorder")?;
 
         match options.command {
-            Command::Record(record_options) => record(log.clone(), config, record_options)?,
+            Command::Record(record_options) => record(log.clone(), config, record_options),
             Command::Analyze(analyze_options) => {
-                analyze_video(log.clone(), config, analyze_options)?
+                analyze_video(log.clone(), config, analyze_options)
             }
         }
-
-        Ok(())
     }();
 
-    if let Err(e) = status {
-        error!(log, "unexpected error"; "error" => %e);
-        drop(log);
-        exit(1);
+    match metrics {
+        Ok(metrics) => {
+            drop(log);
+            println!(
+                "{}",
+                serde_json::to_string(&metrics).expect("could not serialize visual metrics")
+            );
+        }
+        Err(e) => {
+            error!(log, "unexpected error"; "error" => %e);
+            drop(log);
+            exit(1);
+        }
     }
 }
 
 #[tokio::main]
-async fn record(log: Logger, config: Config, options: RecordOptions) -> Result<(), Box<dyn Error>> {
+async fn record(
+    log: Logger,
+    config: Config,
+    options: RecordOptions,
+) -> Result<VisualMetrics, Box<dyn Error>> {
     let tempdir = TempDir::new().expect("could not create temp directory");
 
     if let Some(ref profile_path) = &options.profile_path {
@@ -187,15 +200,35 @@ async fn record(log: Logger, config: Config, options: RecordOptions) -> Result<(
         info!(log, "video written to disk"; "path" => recording_path.display());
     }
 
-    Ok(())
+    analyze_video(
+        log,
+        config,
+        AnalyzeOptions {
+            video_path: recording_path,
+        },
+    )
 }
 
 fn analyze_video(
     log: Logger,
-    _config: Config,
+    config: Config,
     options: AnalyzeOptions,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<VisualMetrics, Box<dyn Error>> {
     info!(log, "analyzing video"; "video" => &options.video_path.display());
 
-    Ok(())
+    let working_dir = TempDir::new()?;
+
+    let cropped_video_path = crop_video(log.clone(), &options.video_path, working_dir.path())?;
+
+    // run visual metrics
+    let metrics = compute_visual_metrics(
+        log.clone(),
+        &config.visual_metrics_path,
+        &cropped_video_path,
+        working_dir.path(),
+    )?;
+
+    info!(log, "computed visual metrics"; "metrics" => ?metrics);
+
+    Ok(metrics)
 }

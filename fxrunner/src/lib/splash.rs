@@ -9,6 +9,7 @@ use std::thread;
 
 use async_trait::async_trait;
 use lazy_static::lazy_static;
+use libfxrecord::ORANGE;
 use tokio::sync::oneshot;
 use winapi::shared::minwindef::{DWORD, HINSTANCE, LPARAM, LRESULT, UINT, WPARAM};
 use winapi::shared::windef::HWND;
@@ -145,10 +146,9 @@ fn ensure_window_class_registered(instance: HINSTANCE) -> Result<(), io::Error> 
     }
 
     // This handle does not need to be freed.
-    //
-    // The colour is here is a specific shade of orange, which is expected by
-    // visualmetrics.py.
-    let brush = check_nonnull(unsafe { wingdi::CreateSolidBrush(wingdi::RGB(222, 100, 13)) })?;
+    let brush = check_nonnull(unsafe {
+        wingdi::CreateSolidBrush(wingdi::RGB(ORANGE[0], ORANGE[1], ORANGE[2]))
+    })?;
 
     // This handle does not need to be freed.
     let cursor = check_nonnull(unsafe { winuser::LoadCursorW(null_mut(), winuser::IDC_ARROW) })?;

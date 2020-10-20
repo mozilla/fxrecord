@@ -1,5 +1,6 @@
 [fxrecorder]
 host = "127.0.0.1:8888"
+visual_metrics_path = "vendor\\visualmetrics.py"
 
 [fxrecorder.recording]
 video_size = { x = 1920, y = 1080 }

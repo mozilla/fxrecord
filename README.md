@@ -34,8 +34,9 @@ diskperf -Y
 additional requirements:
 
 - a capture device compatible with [ffmpeg][ffmpeg] (I am using an
-  [AverMedia Gc551][gc551]); and
-- [ffmpeg][ffmpeg] version 4.2 or newer.
+  [AverMedia Gc551][gc551]);
+- [ffmpeg][ffmpeg] version 4.2 or newer; and
+- [ImageMagick][imagemagick] version 6.9.
 
 `fxrecorder` presently requires a Windows 10 device as it assumes that
 DirectShow will be used for video capture. The capture card used while
@@ -44,6 +45,7 @@ be tested against any other operating system.
 
 [ffmpeg]: https://ffmpeg.org
 [gc551]: https://www.avermedia.com/us/product-detail/GC551
+[imagemagick]: https://legacy.imagemagick.org/
 
 ## Building
 
@@ -69,6 +71,7 @@ recording device.
 [fxrecorder]
 # The host and port that FxRunner is listening on.
 host = "127.0.0.1:8888"
+visual_metrics_path = "vendor\\visualmetrics.py"
 
 [fxrecorder.recording]
 # The size of the video stream.
