@@ -14,7 +14,7 @@ const TIMESTAMP_FORMAT: &str = "%Y-%m-%d %H:%M:%S%.3fZ";
 
 /// Create a logger.
 pub fn build_logger() -> Logger {
-    let decorator = TermDecorator::new().stdout().force_plain().build();
+    let decorator = TermDecorator::new().stderr().force_plain().build();
     let drain = MultiLineDrain { decorator }.fuse();
 
     let drain = slog_async::Async::new(drain).build().fuse();
