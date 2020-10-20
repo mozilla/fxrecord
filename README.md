@@ -51,7 +51,7 @@ be tested against any other operating system.
 use, run
 
 ```sh
-cargo +beta build --release
+cargo build --release
 ```
 
 and the binaries will be located in the `target/release/` subdirectory. Copy
