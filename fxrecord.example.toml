@@ -2,7 +2,6 @@
 host = "127.0.0.1:8888"
 
 [fxrecorder.recording]
-ffmpeg_path = "C:\\ffmpeg\\ffmpeg.exe"
 video_size = { x = 1920, y = 1080 }
 output_size = { x = 1366, y = 768 }
 frame_rate = 60

@@ -71,9 +71,6 @@ recording device.
 host = "127.0.0.1:8888"
 
 [fxrecorder.recording]
-# The path to ffmpeg on the file system.
-ffmpeg_path = "C:\ffmpeg\ffmepg.exe"
-
 # The size of the video stream.
 video_size = { y = 1920, x = 1080 }
 

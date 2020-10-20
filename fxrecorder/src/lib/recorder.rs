@@ -120,10 +120,9 @@ impl<'a> Recorder for FfmpegRecorder<'a> {
         info!(
             self.log,
             "starting ffmpeg...";
-            "ffmpeg_path" => &self.config.ffmpeg_path.display(),
             "args" => ?&args,
         );
-        let mut ffmpeg = Command::new(&self.config.ffmpeg_path)
+        let mut ffmpeg = Command::new("ffmpeg")
             .args(&args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

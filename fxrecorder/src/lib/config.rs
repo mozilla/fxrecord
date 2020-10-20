@@ -20,9 +20,6 @@ pub struct Config {
 /// Recording-specific configuration.
 #[derive(Clone, Debug, Deserialize)]
 pub struct RecordingConfig {
-    /// The path to the `ffmpeg` executable.`
-    pub ffmpeg_path: PathBuf,
-
     /// The name of the video capture device.
     ///
     /// This can be found via running:
