@@ -73,7 +73,7 @@ pub enum FfmpegRecordingError {
     #[error("Could not ask ffmpeg to quit: {}", .0)]
     WriteQ(#[source] io::Error),
 
-    #[error("could not wait for ffmpeg to exist: {}", .0)]
+    #[error("could not wait for ffmpeg to exit: {}", .0)]
     Wait(#[source] io::Error),
 
     #[error("ffmpeg exited with nonzero status: {}", .0)]
