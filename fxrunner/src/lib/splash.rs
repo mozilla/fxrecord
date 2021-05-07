@@ -71,6 +71,10 @@ impl Splash for WindowsSplash {
             let thread_id = unsafe { processthreadsapi::GetCurrentThreadId() };
             tx.send(Ok(thread_id)).unwrap();
 
+            unsafe {
+                winuser::SetCursorPos(display_width as i32, display_height as i32);
+            }
+
             run_message_loop(window_handle);
         });
 
