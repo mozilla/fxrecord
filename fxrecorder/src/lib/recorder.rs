@@ -95,6 +95,7 @@ impl<'a> Recorder for FfmpegRecorder<'a> {
         let framerate_arg = self.config.frame_rate.to_string();
 
         let mut args: Vec<&OsStr> = vec![
+            OsStr::new("-y"), // Always overwrite files that exist.
             OsStr::new("-f"),
             OsStr::new("dshow"),
             OsStr::new("-i"),
