@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use libfxrecord::error::ErrorMessage;
 use libfxrecorder::recorder::Recorder;
-use libfxrunner::osapi::{IoCounters, PerfProvider, ShutdownProvider};
+use libfxrunner::osapi::{CpuTimes, IoCounters, PerfProvider, ShutdownProvider};
 use libfxrunner::session::{
     NewSessionError, ResumeSessionError, ResumeSessionErrorKind, SessionInfo, SessionManager,
 };
@@ -175,13 +175,16 @@ impl PerfProvider for TestPerfProvider {
         }
     }
 
-    fn get_cpu_idle_time(&self) -> Result<f64, Self::CpuTimeError> {
+    fn get_cpu_usage_time(&self) -> Result<CpuTimes, Self::CpuTimeError> {
         self.invoked();
 
         match self.failure_mode {
             Some(PerfFailureMode::CpuTimeError(s)) => Err(ErrorMessage(s)),
-            Some(PerfFailureMode::CpuNeverIdle) => Ok(0f64),
-            _ => Ok(0.99f64),
+            Some(PerfFailureMode::CpuNeverIdle) => Ok(CpuTimes { idle: 0, total: 1 }),
+            _ => Ok(CpuTimes {
+                idle: 99,
+                total: 100,
+            }),
         }
     }
 }

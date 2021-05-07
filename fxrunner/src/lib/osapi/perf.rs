@@ -84,7 +84,16 @@ pub(super) fn get_disk_io_counters() -> Result<IoCounters, DiskIoError> {
     })
 }
 
-pub(super) fn get_cpu_idle_time() -> Result<f64, io::Error> {
+/// Information about the idle time of a CPU in an interval.
+#[derive(Debug, Clone, Copy)]
+pub struct CpuTimes {
+    /// The amount of time the CPU was idle in the interval (in arbitrary units).
+    pub idle: u64,
+    /// The total amount of time in the interval (in arbitrary units).
+    pub total: u64,
+}
+
+pub(super) fn get_cpu_usage_time() -> Result<CpuTimes, io::Error> {
     let mut idle_time = FILETIME {
         dwLowDateTime: 0,
         dwHighDateTime: 0,
@@ -106,16 +115,13 @@ pub(super) fn get_cpu_idle_time() -> Result<f64, io::Error> {
         )
     })?;
 
-    let idle_time = get_filetime_as_u64(idle_time) as f64;
-    let kernel_time = get_filetime_as_u64(kernel_time) as f64;
-    let user_time = get_filetime_as_u64(user_time) as f64;
-
     // Kernel time includes idle time.
     // See documentation of `lpKerneltime` here:
     // https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getsystemtimes
-    let total_time = kernel_time + user_time;
-
-    Ok(idle_time / total_time)
+    Ok(CpuTimes {
+        idle: get_filetime_as_u64(idle_time),
+        total: get_filetime_as_u64(kernel_time) + get_filetime_as_u64(user_time),
+    })
 }
 
 // Return the given `FILETIME` as a u64 of 10^{-7} seconds.

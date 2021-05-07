@@ -18,7 +18,7 @@ mod perf;
 pub mod process;
 mod shutdown;
 
-pub use perf::IoCounters;
+pub use perf::{CpuTimes, IoCounters};
 
 /// A trait providing the ability to restart the current machine.
 pub trait ShutdownProvider: Debug {
@@ -44,10 +44,8 @@ pub trait PerfProvider: Debug {
     /// Return raw read and write IO counters.
     fn get_disk_io_counters(&self) -> Result<IoCounters, Self::DiskIoError>;
 
-    /// Return the percentage of the time that the CPU is idle.
-    ///
-    /// The returned value is between 0 and 1.
-    fn get_cpu_idle_time(&self) -> Result<f64, Self::CpuTimeError>;
+    /// Return the interval that the cpu was idle since startup (in arbitrary units).
+    fn get_cpu_usage_time(&self) -> Result<CpuTimes, Self::CpuTimeError>;
 }
 
 /// A [`ShutdownProvider`](trait.ShutdownProvider.html) that uses the Windows API.
@@ -96,8 +94,8 @@ impl PerfProvider for WindowsPerfProvider {
         perf::get_disk_io_counters()
     }
 
-    fn get_cpu_idle_time(&self) -> Result<f64, Self::CpuTimeError> {
-        perf::get_cpu_idle_time()
+    fn get_cpu_usage_time(&self) -> Result<CpuTimes, Self::CpuTimeError> {
+        perf::get_cpu_usage_time()
     }
 }
 
@@ -127,24 +125,31 @@ where
         .get_disk_io_counters()
         .map_err(WaitForIdleError::DiskIoError)?;
 
+    let mut time = p
+        .get_cpu_usage_time()
+        .map_err(WaitForIdleError::CpuTimeError)?;
+
     for _ in 0..P::ATTEMPT_COUNT {
         delay_for(Duration::from_millis(500)).await;
 
         let new_counters = p
             .get_disk_io_counters()
             .map_err(WaitForIdleError::DiskIoError)?;
-        let idle = p
-            .get_cpu_idle_time()
+        let new_time = p
+            .get_cpu_usage_time()
             .map_err(WaitForIdleError::CpuTimeError)?;
 
         let delta_reads = new_counters.reads - counters.reads;
         let delta_writes = new_counters.writes - counters.writes;
+
+        let idle = (new_time.idle - time.idle) as f64 / (new_time.total - time.total) as f64;
 
         if idle >= TARGET_CPU_IDLE_PERCENTAGE && delta_reads == 0 && delta_writes == 0 {
             return Ok(());
         }
 
         counters = new_counters;
+        time = new_time;
     }
 
     Err(WaitForIdleError::TimeoutError)
