@@ -536,8 +536,6 @@ where
                     }
                 };
 
-                info!(self.log, "child_process()"; "handle" => ?firefox_main_handle.as_ptr());
-
                 if let Err(e) = terminate_process(&firefox_main_handle, 1) {
                     error!(self.log, "could not terminate Firefox main process"; "error" => %e);
                     errors.push(e.into_error_message());
