@@ -50,6 +50,7 @@ enum Command {
 /// Record a video from FxRunner and perform analysis.
 struct RecordOptions {
     /// The ID of a build task that will be used by the runner.
+    #[structopt(env = "FXRECORD_TASK_ID")]
     task_id: String,
 
     /// The path to a zipped Firefox profile for the runner to use.
