@@ -2,7 +2,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use serde::Deserialize;
@@ -11,7 +10,7 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize)]
 pub struct Config {
     /// The address of the `fxrunner` to connect to.
-    pub host: SocketAddr,
+    pub host: String,
 
     /// The path to the `visualmetrics.py` script.
     pub visual_metrics_path: PathBuf,

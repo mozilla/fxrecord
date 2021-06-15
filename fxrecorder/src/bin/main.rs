@@ -131,7 +131,7 @@ async fn record(
 
     let session_id = {
         let stream = TcpStream::connect(&config.host).await?;
-        info!(log, "Connected"; "peer" => config.host);
+        info!(log, "Connected"; "peer" => &config.host);
 
         // TODO: Ideally we would split new_session and resume_session into
         //       static methods so that we do not need to specify the recorder here.
@@ -170,7 +170,7 @@ async fn record(
                 e
             })?;
 
-        info!(log, "Re-connected"; "peer" => config.host);
+        info!(log, "Re-connected"; "peer" => &config.host);
 
         let mut proto = RecorderProto::new(
             log.clone(),
