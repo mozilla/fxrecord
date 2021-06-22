@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use libfxrecord::config::read_config;
 use libfxrecord::error::ErrorMessage;
-use libfxrecord::logging::build_logger;
+use libfxrecord::logging::build_terminal_logger;
 use libfxrecord::net::Idle;
 use libfxrecord::prefs::{parse_pref, PrefValue};
 use libfxrecorder::analysis::{compute_visual_metrics, crop_video, VisualMetrics};
@@ -81,7 +81,7 @@ struct AnalyzeOptions {
 }
 
 fn main() {
-    let log = build_logger();
+    let log = build_terminal_logger();
 
     let options = Options::from_args();
     info!(log, "read command-line options"; "options" => ?options);

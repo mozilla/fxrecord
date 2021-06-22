@@ -3,23 +3,46 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use std::fmt;
+use std::fs::OpenOptions;
 use std::io;
+use std::path::Path;
 
 use chrono::Utc;
-use slog::{Drain, Key, Logger, OwnedKVList, Record, Serializer, KV};
-use slog_term::{Decorator, RecordDecorator, TermDecorator};
+use slog::{Drain, Duplicate, Key, Logger, OwnedKVList, Record, Serializer, KV};
+use slog_term::{Decorator, PlainDecorator, RecordDecorator, TermDecorator};
 
 // RFC3339 timestamp with millisecond precision.
 const TIMESTAMP_FORMAT: &str = "%Y-%m-%d %H:%M:%S%.3fZ";
 
-/// Create a logger.
-pub fn build_logger() -> Logger {
+/// Create a logger that logs to stderr.
+pub fn build_terminal_logger() -> Logger {
     let decorator = TermDecorator::new().stderr().force_plain().build();
     let drain = MultiLineDrain { decorator }.fuse();
 
     let drain = slog_async::Async::new(drain).build().fuse();
 
     Logger::root(drain, slog::o! {})
+}
+
+/// Create a logger that logs to stderr and to a file.
+pub fn build_file_logger(path: &Path) -> Result<Logger, std::io::Error> {
+    let term_decorator = TermDecorator::new().stderr().force_plain().build();
+    let term_drain = MultiLineDrain {
+        decorator: term_decorator,
+    }
+    .fuse();
+
+    let f = OpenOptions::new().create(true).append(true).open(path)?;
+
+    let file_decorator = PlainDecorator::new(f);
+    let file_drain = MultiLineDrain {
+        decorator: file_decorator,
+    }
+    .fuse();
+
+    let drain = Duplicate::new(file_drain, term_drain).fuse();
+    let drain = slog_async::Async::new(drain).build().fuse();
+    Ok(Logger::root(drain, slog::o! {}))
 }
 
 /// A drain that serializes each key-value pair on their own line, indented from
