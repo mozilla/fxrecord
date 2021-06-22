@@ -107,6 +107,7 @@ pub enum PerfFailureMode {
 pub struct TestPerfProvider {
     failure_mode: Option<PerfFailureMode>,
     io_counters: RefCell<IoCounters>,
+    cpu_times: RefCell<CpuTimes>,
     assert_invoked: Option<RefCell<AssertInvoked>>,
 }
 
@@ -114,6 +115,7 @@ impl Default for TestPerfProvider {
     fn default() -> Self {
         TestPerfProvider {
             io_counters: Default::default(),
+            cpu_times: Default::default(),
             failure_mode: None,
             assert_invoked: None,
         }
@@ -124,6 +126,7 @@ impl TestPerfProvider {
     pub fn with_failure(mode: PerfFailureMode) -> Self {
         TestPerfProvider {
             io_counters: Default::default(),
+            cpu_times: Default::default(),
             failure_mode: Some(mode),
             assert_invoked: Some(RefCell::new(AssertInvoked::new("TestPerfProvider", true))),
         }
@@ -132,6 +135,7 @@ impl TestPerfProvider {
     pub fn asserting_invoked() -> Self {
         TestPerfProvider {
             io_counters: Default::default(),
+            cpu_times: Default::default(),
             failure_mode: None,
             assert_invoked: Some(RefCell::new(AssertInvoked::new("TestPerfProvider", true))),
         }
@@ -140,6 +144,7 @@ impl TestPerfProvider {
     pub fn asserting_not_invoked() -> Self {
         TestPerfProvider {
             io_counters: Default::default(),
+            cpu_times: Default::default(),
             failure_mode: None,
             assert_invoked: Some(RefCell::new(AssertInvoked::new("TestPerfProvider", false))),
         }
@@ -181,10 +186,14 @@ impl PerfProvider for TestPerfProvider {
         match self.failure_mode {
             Some(PerfFailureMode::CpuTimeError(s)) => Err(ErrorMessage(s)),
             Some(PerfFailureMode::CpuNeverIdle) => Ok(CpuTimes { idle: 0, total: 1 }),
-            _ => Ok(CpuTimes {
-                idle: 99,
-                total: 100,
-            }),
+            _ => {
+                let mut cpu_times = self.cpu_times.borrow_mut();
+
+                cpu_times.idle += 99;
+                cpu_times.total += 100;
+
+                Ok(*cpu_times)
+            }
         }
     }
 }
