@@ -85,7 +85,7 @@ pub(super) fn get_disk_io_counters() -> Result<IoCounters, DiskIoError> {
 }
 
 /// Information about the idle time of a CPU in an interval.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct CpuTimes {
     /// The amount of time the CPU was idle in the interval (in arbitrary units).
     pub idle: u64,
