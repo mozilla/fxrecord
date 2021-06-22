@@ -9,7 +9,7 @@ use std::process::exit;
 use std::time::Duration;
 
 use libfxrecord::config::read_config;
-use libfxrecord::logging::build_logger;
+use libfxrecord::logging::build_file_logger;
 use libfxrunner::config::Config;
 use libfxrunner::osapi::{WindowsPerfProvider, WindowsShutdownProvider};
 use libfxrunner::proto::RunnerProto;
@@ -35,6 +35,9 @@ struct Options {
     #[cfg(debug_assertions)]
     #[structopt(long)]
     skip_restart: bool,
+
+    #[structopt(long = "log", default_value = "fxrunner.log")]
+    log_path: PathBuf,
 }
 
 impl Options {
@@ -58,8 +61,10 @@ impl Options {
 #[tokio::main]
 async fn main() {
     let options = Options::from_args();
-    let log = build_logger();
-    info!(log, "read command-line options"; "options" => ?options);
+
+    // If we cannot open a log, we may as well crash since we have no where to
+    // log the error.
+    let log = build_file_logger(&options.log_path).expect("Could not open log");
 
     if let Err(e) = fxrunner(log.clone(), options).await {
         error!(log, "unexpected error"; "error" => %e);

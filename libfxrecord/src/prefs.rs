@@ -13,7 +13,7 @@ use tokio::prelude::*;
 /// The value of a pref.
 ///
 /// Prefs are limited to booleans, numbers, and strings.
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct PrefValue(Value);
 
 /// An error from attemtpting to coerce a `Value` into a
