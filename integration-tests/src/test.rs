@@ -112,7 +112,7 @@ async fn test_new_session_ok() {
         TestSessionManager::default(),
         |mut recorder, _tempdir| async move {
             assert_eq!(
-                recorder.new_session("task_id", None, vec![]).await.unwrap(),
+                recorder.new_session("task_id", None, &[]).await.unwrap(),
                 VALID_SESSION_ID
             );
         },
@@ -161,7 +161,7 @@ async fn test_new_session_ok() {
         |mut recorder, _tempdir| async move {
             assert_eq!(
                 recorder
-                    .new_session("task_id", Some(&test_dir().join("profile.zip")), vec![])
+                    .new_session("task_id", Some(&test_dir().join("profile.zip")), &[])
                     .await
                     .unwrap(),
                 VALID_SESSION_ID
@@ -194,7 +194,7 @@ async fn test_new_session_ok() {
                 .new_session(
                     "task_id",
                     Some(&test_dir().join("profile.zip")),
-                    vec![
+                    &[
                         (
                             "foo".into(),
                             Value::String("bar".into()).try_into().unwrap(),
@@ -243,7 +243,7 @@ async fn test_new_session_ok() {
                 .new_session(
                     "task_id",
                     None,
-                    vec![
+                    &[
                         (
                             "foo".into(),
                             Value::String("bar".into()).try_into().unwrap(),
@@ -295,7 +295,7 @@ async fn test_new_session_err_request_manager() {
         )),
         |mut recorder, _tempdir| async move {
             assert_matches!(
-                recorder.new_session("task_id", None, vec![]).await.unwrap_err(),
+                recorder.new_session("task_id", None, &[]).await.unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
                     assert_eq!(
                         e.to_string(),
@@ -327,7 +327,7 @@ async fn test_new_session_err_request_manager() {
         )),
         |mut recorder, _tempdir| async move {
             assert_matches!(
-                recorder.new_session("task_id", None, vec![]).await.unwrap_err(),
+                recorder.new_session("task_id", None, &[]).await.unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
                     assert_eq!(
                         e.to_string(),
@@ -367,7 +367,7 @@ async fn test_new_session_err_downloadbuild() {
         |mut recorder, _tempdir| async move {
             assert_matches!(
                 recorder
-                    .new_session("task_id", None, vec![])
+                    .new_session("task_id", None, &[])
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -398,7 +398,7 @@ async fn test_new_session_err_downloadbuild() {
         |mut recorder, _tempdir| async move {
             assert_matches!(
                 recorder
-                    .new_session("task_id", None, vec![])
+                    .new_session("task_id", None, &[])
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -434,7 +434,7 @@ async fn test_new_session_err_downloadbuild() {
         |mut recorder, _tempdir| async move {
             assert_matches!(
                 recorder
-                    .new_session("task_id", None, vec![])
+                    .new_session("task_id", None, &[])
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -482,7 +482,7 @@ async fn test_new_session_err_recvprofile() {
         |mut recorder, _tempdir| async move {
             assert_matches!(
                 recorder
-                    .new_session("task_id", Some(&test_dir().join("README.md")), vec![])
+                    .new_session("task_id", Some(&test_dir().join("README.md")), &[])
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -525,7 +525,7 @@ async fn test_new_session_err_recvprofile() {
         |mut recorder, _tempdir| async move {
             assert_matches!(
                 recorder
-                    .new_session("task_id", Some(&test_dir().join("empty.zip")), vec![])
+                    .new_session("task_id", Some(&test_dir().join("empty.zip")), &[])
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {
@@ -558,7 +558,7 @@ async fn test_new_session_err_restarting() {
         TestSessionManager::default(),
         |mut recorder, _tempdir| async move {
             assert_matches!(
-                recorder.new_session("task_id", None, vec![])
+                recorder.new_session("task_id", None, &[])
                     .await
                     .unwrap_err(),
                 RecorderProtoError::Proto(ProtoError::Foreign(e)) => {

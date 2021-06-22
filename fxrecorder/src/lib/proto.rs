@@ -42,7 +42,7 @@ where
         &mut self,
         task_id: &str,
         profile_path: Option<&Path>,
-        prefs: Vec<(String, PrefValue)>,
+        prefs: &[(String, PrefValue)],
     ) -> Result<String, RecorderProtoError<R::Error>> {
         info!(self.log, "Requesting new session");
 
@@ -55,7 +55,7 @@ where
             NewSessionRequest {
                 build_task_id: task_id.into(),
                 profile_size,
-                prefs,
+                prefs: Vec::from(prefs),
             }
             .into(),
         )

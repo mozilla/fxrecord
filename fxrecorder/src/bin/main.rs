@@ -4,6 +4,8 @@
 
 use std::env::current_dir;
 use std::error::Error;
+use std::fs::File;
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::exit;
 use std::time::Duration;
@@ -23,9 +25,9 @@ use structopt::StructOpt;
 use tempfile::TempDir;
 use tokio::net::TcpStream;
 
+/// Record and analyze videos of Firefox desktop startup.
 #[derive(Debug, StructOpt)]
 #[structopt(name = "fxrecorder")]
-/// Record and analyze videos of Firefox desktop startup.
 struct Options {
     /// The configuration file to use.
     #[structopt(long = "config", default_value = "fxrecord.toml")]
@@ -33,6 +35,12 @@ struct Options {
 
     #[structopt(subcommand)]
     command: Command,
+
+    /// The path to write the computed visual metrics to.
+    ///
+    /// Defaults to stdout if not provided.
+    #[structopt(long = "output", env = "FXRECORD_OUTPUT_PATH")]
+    output_path: Option<PathBuf>,
 }
 
 #[derive(Debug, StructOpt)]
@@ -46,8 +54,8 @@ enum Command {
     Analyze(AnalyzeOptions),
 }
 
-#[derive(Debug, StructOpt)]
 /// Record a video from FxRunner and perform analysis.
+#[derive(Debug, StructOpt)]
 struct RecordOptions {
     /// The ID of a build task that will be used by the runner.
     #[structopt(env = "FXRECORD_TASK_ID")]
@@ -75,8 +83,10 @@ struct RecordOptions {
     keep_video: bool,
 }
 
+/// Analyze a pre-recorded video.
 #[derive(Debug, StructOpt)]
 struct AnalyzeOptions {
+    /// The video to analyze.
     video_path: PathBuf,
 }
 
@@ -86,30 +96,33 @@ fn main() {
     let options = Options::from_args();
     info!(log, "read command-line options"; "options" => ?options);
 
-    let metrics = || -> Result<VisualMetrics, Box<dyn Error>> {
+    let result = || -> Result<(), Box<dyn Error>> {
         let config: Config = read_config(&options.config_path, "fxrecorder")?;
 
-        match options.command {
-            Command::Record(record_options) => record(log.clone(), config, record_options),
-            Command::Analyze(analyze_options) => {
-                analyze_video(log.clone(), config, analyze_options)
+        let metrics = match options.command {
+            Command::Record(ref record_options) => record(log.clone(), config, record_options),
+            Command::Analyze(ref analyze_options) => {
+                analyze_video(log.clone(), config, &analyze_options)
             }
+        }?;
+
+        let metrics_json =
+            serde_json::to_string(&metrics).expect("could not serialize visual metrics");
+
+        if let Some(output_path) = options.output_path.as_deref() {
+            let mut f = File::create(output_path)?;
+            write!(f, "{}", metrics_json)?;
+        } else {
+            println!("{}", metrics_json);
         }
+
+        Ok(())
     }();
 
-    match metrics {
-        Ok(metrics) => {
-            drop(log);
-            println!(
-                "{}",
-                serde_json::to_string(&metrics).expect("could not serialize visual metrics")
-            );
-        }
-        Err(e) => {
-            error!(log, "unexpected error"; "error" => %e);
-            drop(log);
-            exit(1);
-        }
+    if let Err(e) = result {
+        error!(log, "unexpected error"; "error" => %e);
+        drop(log);
+        exit(1);
     }
 }
 
@@ -117,7 +130,7 @@ fn main() {
 async fn record(
     log: Logger,
     config: Config,
-    options: RecordOptions,
+    options: &RecordOptions,
 ) -> Result<VisualMetrics, Box<dyn Error>> {
     let tempdir = TempDir::new().expect("could not create temp directory");
 
@@ -145,7 +158,7 @@ async fn record(
             .new_session(
                 &options.task_id,
                 options.profile_path.as_deref(),
-                options.prefs,
+                &options.prefs,
             )
             .await?
     };
@@ -204,7 +217,7 @@ async fn record(
     analyze_video(
         log,
         config,
-        AnalyzeOptions {
+        &AnalyzeOptions {
             video_path: recording_path,
         },
     )
@@ -213,7 +226,7 @@ async fn record(
 fn analyze_video(
     log: Logger,
     config: Config,
-    options: AnalyzeOptions,
+    options: &AnalyzeOptions,
 ) -> Result<VisualMetrics, Box<dyn Error>> {
     info!(log, "analyzing video"; "video" => &options.video_path.display());
 
