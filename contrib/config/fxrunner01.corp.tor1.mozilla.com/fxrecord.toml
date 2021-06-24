@@ -1,0 +1,4 @@
+[fxrunner]
+host = "0.0.0.0:8888"
+session_dir = "C:\\fxrunner\\sessions"
+display_size = { x = 1366, y = 768 }
