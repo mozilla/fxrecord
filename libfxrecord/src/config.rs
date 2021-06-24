@@ -70,7 +70,7 @@ pub enum ConfigError {
     },
 
     /// The file could not be parsed.
-    #[error("Could not parse config file `{}': {}", "path.display()", .source)]
+    #[error("Could not parse config file `{}': {}", .path.display(), .source)]
     Parse {
         path: PathBuf,
         source: toml::de::Error,
