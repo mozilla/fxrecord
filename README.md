@@ -114,3 +114,23 @@ cargo test -p integration-tests -- --nocapture --test-threads 1
 ```
 
 to force unit tests to run sequentially.
+
+## Deployment
+
+Deployment is done with the `Deploy.ps1` script.
+
+Example:
+
+```ps1
+# Deploy fxrecorder the host-specific configuration.
+.\contrib\Deploy.ps1 `
+    -HostName fxrecorder01.corp.tor1.mozilla.com `
+    -UserName fxrecord `
+    -MachineType recorder
+
+# Deploy fxrunner and the host-specific configuration.
+.\contrib\Deploy.ps1 `
+    -HostName fxrunner01.corp.tor1.mozilla.com `
+    -UserName fxrunner `
+    -MachineType runner
+```

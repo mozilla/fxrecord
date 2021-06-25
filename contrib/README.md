@@ -4,6 +4,10 @@ This folder contains configuration and management scripts.
 
 ## Contents
 
-### config/
+### deployment/
 
-Configuration files for fxrecord deployments.
+Management scripts and configuration for fxrecord deployments.
+
+### Deploy.ps1
+
+The deployment script.
