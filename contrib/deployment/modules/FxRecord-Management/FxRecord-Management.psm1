@@ -14,6 +14,8 @@ function Get-UserSessions {
     # USERNAME              SESSIONNAME        ID  STATE   IDLE TIME  LOGON TIME
     # >fxrecorder            rdp-tcp#7           5  Active          .  2021-06-11 6:06 PM
     # ```
+
+    #TODO: check for failure: No User exists for *
     return (quser) |                          <# Query all user sessions #> `
         Select-Object -Skip 1 |               <# Strip off the leading column names #> `
         Foreach-Object { $_.substring(1) } |  <# Strip off the leading character (> or space) #>`
