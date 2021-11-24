@@ -1,0 +1,4 @@
+pyssim==0.4
+Pillow==8.4.0
+scipy==1.7.3
+numpy==1.21.4

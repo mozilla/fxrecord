@@ -16,7 +16,7 @@ Test-AdminRole
 
 $TASKCLUSTER_VERSION = "v44.0.0"
 $NSSM_VERSION = "2.24"
-$PYTHON_VERSION = "3.9.5"
+$PYTHON_VERSION = "3.9.9"
 
 Set-ExecutionPolicy Unrestricted -Force -Scope Process
 
