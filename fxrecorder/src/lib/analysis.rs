@@ -231,19 +231,19 @@ where
 #[derive(Debug, Deserialize, Serialize)]
 pub struct VisualMetrics {
     #[serde(rename = "videoRecordingStart")]
-    video_recording_start: u32,
+    pub video_recording_start: u32,
 
     #[serde(rename = "FirstVisualChange")]
-    first_visual_change: u32,
+    pub first_visual_change: u32,
 
     #[serde(rename = "LastVisualChange")]
-    last_visual_change: u32,
+    pub last_visual_change: u32,
 
     #[serde(rename = "SpeedIndex")]
-    speed_index: u32,
+    pub speed_index: u32,
 
     #[serde(rename = "VisualProgress")]
-    visual_progress: String,
+    pub visual_progress: String,
 }
 
 #[derive(Debug, Error)]

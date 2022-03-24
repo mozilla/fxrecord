@@ -5,6 +5,7 @@
 pub mod analysis;
 pub mod config;
 pub mod ffmpeg;
+pub mod perfherder;
 pub mod proto;
 pub mod recorder;
 pub mod retry;

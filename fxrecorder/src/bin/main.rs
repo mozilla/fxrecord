@@ -17,6 +17,7 @@ use libfxrecord::net::Idle;
 use libfxrecord::prefs::{parse_pref, PrefValue};
 use libfxrecorder::analysis::{compute_visual_metrics, crop_video, VisualMetrics};
 use libfxrecorder::config::Config;
+use libfxrecorder::perfherder::generate_perfherder_metrics;
 use libfxrecorder::proto::RecorderProto;
 use libfxrecorder::recorder::FfmpegRecorder;
 use libfxrecorder::retry::delayed_exponential_retry;
@@ -109,12 +110,17 @@ fn main() {
         let metrics_json =
             serde_json::to_string(&metrics).expect("could not serialize visual metrics");
 
+        let perfherder_metrics = serde_json::to_string(&generate_perfherder_metrics(&metrics))
+            .expect("could not serialize perfherder metrics");
+
         if let Some(output_path) = options.output_path.as_deref() {
             let mut f = File::create(output_path)?;
             write!(f, "{}", metrics_json)?;
         } else {
             println!("{}", metrics_json);
         }
+
+        println!("PERFHERDER_DATA: {}", perfherder_metrics);
 
         Ok(())
     }();
