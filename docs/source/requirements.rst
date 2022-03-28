@@ -32,9 +32,3 @@ See the :doc:`deployment` section for details on installation in a production se
 .. _imagemagick: https://legacy.imagemagick.org/
 .. _gc551: https://www.avermedia.com/us/product-detail/GC551
 .. _hd60s: https://www.elgato.com/en/game-capture-hd60-s
-
-
-fxrunner
---------
-
-fxrunner requires the following
