@@ -1,6 +1,6 @@
 [fxrecorder]
 host = "fxrunner01.corp.tor1.mozilla.com:8888"
-visual_metrics_path = "C:\\fxrecorder\\fxrecord.toml"
+visual_metrics_path = "C:\\fxrecorder\\vendor\\visualmetrics.py"
 
 [fxrecorder.recording]
 video_size = { x = 1920, y = 1080 }
