@@ -66,7 +66,7 @@ try {
 
     Write-Host Copying configuration...
 
-    $configFile = "contrib\config\${HostName}\fxrecord.toml"
+    $configFile = "config\${HostName}\fxrecord.toml"
     if (Test-Path $configFile) {
         if ($MachineType -eq "runner") {
             Copy-Item -Force -Path $configFile -ToSession $session -Destination C:\fxrunner\
