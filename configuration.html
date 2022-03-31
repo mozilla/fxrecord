@@ -1,0 +1,277 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  
+  <title>Configuration &mdash; fxrecord 0.1.0 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+
+  
+  
+
+  
+  
+
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Deployment" href="deployment.html" />
+    <link rel="prev" title="Testing" href="testing.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="index.html" class="icon icon-home"> fxrecord
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="requirements.html">Requirements</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html">Building</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Configuration</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#fxrunner">fxrunner</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fxrecorder">fxrecorder</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="deployment.html">Deployment</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">fxrecord</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+        
+      <li>Configuration</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+          
+            <a href="_sources/configuration.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="configuration">
+<h1>Configuration<a class="headerlink" href="#configuration" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="fxrunner">
+<h2>fxrunner<a class="headerlink" href="#fxrunner" title="Permalink to this headline">¶</a></h2>
+<p><strong class="program">fxrunner</strong> is managed by a config file named <code class="file docutils literal notranslate"><span class="pre">fxrecord.toml</span></code>:</p>
+<div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="k">[fxrunner]</span><span class="w"></span>
+<span class="c1"># The host and port fxrunner will listen on.</span><span class="w"></span>
+<span class="n">host</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;0.0.0.0:8888&quot;</span><span class="w"></span>
+
+<span class="c1"># The directory to store sessions (downloaded builds of Firefox and profiles)</span><span class="w"></span>
+<span class="c1"># to persist through reboots.</span><span class="w"></span>
+<span class="n">session_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;C:\\fxrunner\\sessions&quot;</span><span class="w"></span>
+
+<span class="c1"># The size of the display.</span><span class="w"></span>
+<span class="n">display_size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1366</span><span class="p">,</span><span class="w"> </span><span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">768</span><span class="w"> </span><span class="p">}</span><span class="w"></span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="fxrecorder">
+<h2>fxrecorder<a class="headerlink" href="#fxrecorder" title="Permalink to this headline">¶</a></h2>
+<p><strong class="program">fxrecorder</strong> is managed by a config file name <code class="file docutils literal notranslate"><span class="pre">fxrecord.toml</span></code>:</p>
+<div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="k">[fxrecorder]</span><span class="w"></span>
+<span class="c1"># The host and port that fxrunner is listening on. Hostnames are supported.</span><span class="w"></span>
+<span class="n">host</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;127.0.0.1:8888&quot;</span><span class="w"></span>
+
+<span class="c1"># The path to vendor/visualmetrics.py</span><span class="w"></span>
+<span class="n">visual_metrics_path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;c:\\fxrecorder\\vendor\\visualmetrics.py&quot;</span><span class="w"></span>
+
+<span class="k">[fxrecorder.recording]</span><span class="w"></span>
+<span class="c1"># The resolution captured by the capture card.</span><span class="w"></span>
+<span class="n">video_size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1920</span><span class="p">,</span><span class="w"> </span><span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1080</span><span class="w"> </span><span class="p">}</span><span class="w"></span>
+
+<span class="c1"># The output size of the video. This should match `fxrunner.display_size`.</span><span class="w"></span>
+<span class="n">output_size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1366</span><span class="p">,</span><span class="w"> </span><span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">768</span><span class="w"> </span><span class="p">}</span><span class="w"></span>
+
+<span class="c1"># The frame rate of the capture card.</span><span class="w"></span>
+<span class="n">frame_rate</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">60</span><span class="w"></span>
+
+<span class="c1"># The name of the capture card as detected by ffmpeg.</span><span class="w"></span>
+<span class="n">device</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;Game Capture HD60 S&quot;</span><span class="w"></span>
+
+<span class="c1"># The size of the buffer for capturing video while encoding. At least 1GB is recommended.</span><span class="w"></span>
+<span class="n">buffer_size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;1000M&quot;</span><span class="w"></span>
+
+<span class="c1"># The minimum time a recording can take.</span><span class="w"></span>
+<span class="n">minimum_recording_time_secs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">60</span><span class="w"></span>
+</pre></div>
+</div>
+<p>To determine the name of your capture card, you can run:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ffmpeg</span> <span class="o">-</span><span class="n">hide_banner</span> <span class="o">-</span><span class="n">list_devices</span> <span class="o">-</span><span class="n">f</span> <span class="n">dshow</span> <span class="o">-</span><span class="n">i</span> <span class="n">dummy</span>
+</pre></div>
+</div>
+<p>which will provide output like:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span><span class="n">dshow</span> <span class="o">@</span> <span class="mi">000001</span><span class="n">a2656ad240</span><span class="p">]</span> <span class="n">DirectShow</span> <span class="n">video</span> <span class="n">devices</span> <span class="p">(</span><span class="n">some</span> <span class="n">may</span> <span class="n">be</span> <span class="n">both</span> <span class="n">video</span> <span class="ow">and</span> <span class="n">audio</span> <span class="n">devices</span><span class="p">)</span>
+<span class="p">[</span><span class="n">dshow</span> <span class="o">@</span> <span class="mi">000001</span><span class="n">a2656ad240</span><span class="p">]</span>  <span class="s2">&quot;AVerMedia GC551 Video Capture&quot;</span>
+<span class="p">[</span><span class="n">dshow</span> <span class="o">@</span> <span class="mi">000001</span><span class="n">a2656ad240</span><span class="p">]</span>  <span class="s2">&quot;Game Capture HD60 S&quot;</span>
+</pre></div>
+</div>
+<p>The quoted names are the values the configuration accepts.</p>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+        <a href="deployment.html" class="btn btn-neutral float-right" title="Deployment" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="testing.html" class="btn btn-neutral float-left" title="Testing" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

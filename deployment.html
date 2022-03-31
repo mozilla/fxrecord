@@ -1,0 +1,345 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  
+  <title>Deployment &mdash; fxrecord 0.1.0 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+
+  
+  
+
+  
+  
+
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Configuration" href="configuration.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="index.html" class="icon icon-home"> fxrecord
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="requirements.html">Requirements</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html">Building</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuration.html">Configuration</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Deployment</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#fresh-installation">Fresh Installation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#common-installation-steps">Common Installation Steps</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fxrecorder">fxrecorder</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fxrunner">fxrunner</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#updating-existing-deployments">Updating Existing Deployments</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#update-fxrecorder">fxrecorder</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#update-fxrunner">fxrunner</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">fxrecord</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+        
+      <li>Deployment</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+          
+            <a href="_sources/deployment.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="deployment">
+<h1>Deployment<a class="headerlink" href="#deployment" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="fresh-installation">
+<h2>Fresh Installation<a class="headerlink" href="#fresh-installation" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="common-installation-steps">
+<h3>Common Installation Steps<a class="headerlink" href="#common-installation-steps" title="Permalink to this headline">¶</a></h3>
+<p>Both fxrecorder and fxrunner instances require running the following steps:</p>
+<ol class="arabic">
+<li><p>Install PowerShell 7+</p>
+<p>PowerShell can be downloaded from <a class="reference external" href="https://github.com/PowerShell/PowerShell/releases/latest/">GitHub</a>. The default
+options are sufficient.</p>
+</li>
+<li><p>Install and configure OpenSSH server.</p>
+<p>SSH is used for remote management of fxrecorder and fxrunner. To install on
+Windows, open an elevated PowerShell window and run:</p>
+<div class="highlight-ps1 notranslate"><div class="highlight"><pre><span></span><span class="nv">$cap</span> <span class="p">=</span> <span class="nb">Get-WindowsCapability</span> <span class="n">-Online</span> <span class="p">|</span> <span class="p">?</span> <span class="n">Name</span> <span class="o">-Like</span> <span class="s2">&quot;OpenSSH.Server*&quot;</span>
+<span class="nb">Add-WindowsCapability</span> <span class="n">-Online</span> <span class="n">-Name</span> <span class="nv">$cap</span><span class="p">.</span><span class="n">Name</span>
+</pre></div>
+</div>
+<p>Windows will download and install OpenSSH server.</p>
+</li>
+<li><p>Configure OpenSSH</p>
+<p>The default configuration of OpenSSH does not allow PowerShell remoting.</p>
+<p>First, start and stop the OpenSSH server to have it generate the default
+configuration:</p>
+<div class="highlight-ps1 notranslate"><div class="highlight"><pre><span></span><span class="nb">Set-Service</span> <span class="n">-Name</span> <span class="n">sshd</span> <span class="n">-Status</span> <span class="n">Running</span>
+<span class="nb">Set-Service</span> <span class="n">-Name</span> <span class="n">sshd</span> <span class="n">-Status</span> <span class="n">Stopped</span>
+</pre></div>
+</div>
+<p>Then, open the configuration file at <code class="file docutils literal notranslate"><span class="pre">C:\ProgramData\ssh\sshd_config</span></code> and
+add the following</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Subsystem</span> <span class="n">powershell</span>      <span class="n">pwsh</span><span class="o">.</span><span class="n">exe</span> <span class="o">-</span><span class="n">sshs</span> <span class="o">-</span><span class="n">NoLogo</span>
+</pre></div>
+</div>
+<p>Finally, enable and start the sshd service:</p>
+<div class="highlight-ps1 notranslate"><div class="highlight"><pre><span></span><span class="nb">Set-Service</span> <span class="n">-Name</span> <span class="n">sshd</span> <span class="n">-StartupType</span> <span class="n">Automatic</span> <span class="n">-Status</span> <span class="n">Running</span>
+</pre></div>
+</div>
+</li>
+<li><p>Do platform-specific configuration (<a class="reference internal" href="#install-fxrecorder">fxrecorder</a> or
+<a class="reference internal" href="#install-fxrunner">fxrunner</a>).</p></li>
+</ol>
+</div>
+<div class="section" id="fxrecorder">
+<span id="install-fxrecorder"></span><h3>fxrecorder<a class="headerlink" href="#fxrecorder" title="Permalink to this headline">¶</a></h3>
+<ol class="arabic">
+<li><p>Install ImageMagick and FFmpeg.</p>
+<p>fxrecoder additionally requires an installation of ImageMagick 6.9 and ffmpeg
+4.2. Download the <a class="reference external" href="https://legacy.imagemagick.org/script/download.php#windows">latest Windows binary release</a> and run the
+installer. Make sure to also check “Install FFmpeg”.</p>
+</li>
+<li><p>Run the deployment script.</p>
+<p>This script will copy all management modules and scripts to the host, as well
+as build and deploy fxrecorder with its configuration.</p>
+<div class="highlight-ps1 notranslate"><div class="highlight"><pre><span></span><span class="p">.\</span><span class="n">contrib</span><span class="p">\</span><span class="n">Deploy</span><span class="p">.</span><span class="n">ps1</span> <span class="n">-HostName</span> <span class="nv">$hostname</span> <span class="n">-UserName</span> <span class="n">fxrecorder</span> <span class="n">-MachineType</span> <span class="n">recorder</span>
+</pre></div>
+</div>
+</li>
+<li><p>Run the installation script.</p>
+<p>The installation script is run on the remote host over SSH. Run the following
+to authenticate to the machine and run the script:</p>
+<div class="highlight-ps1 notranslate"><div class="highlight"><pre><span></span><span class="nb">Enter-PSSession</span> <span class="n">-UserName</span> <span class="n">fxrecorder</span> <span class="nv">$hostname</span>
+<span class="nb">Install-FxRecorder</span><span class="p">.</span><span class="n">ps1</span>
+<span class="nb">Exit-PSSession</span>
+</pre></div>
+</div>
+<p>The installation script will handle download and installation of all other
+dependencies. It will prompt you for the Taskcluster access token, client ID,
+and worker ID.</p>
+</li>
+</ol>
+</div>
+<div class="section" id="fxrunner">
+<span id="install-fxrunner"></span><h3>fxrunner<a class="headerlink" href="#fxrunner" title="Permalink to this headline">¶</a></h3>
+<ol class="arabic">
+<li><p>Run the deployment script.</p>
+<p>This script will copy all management modules and scripts to the host, as well
+as build and deploy fxrecorder with its configuration.</p>
+<div class="highlight-ps1 notranslate"><div class="highlight"><pre><span></span><span class="p">.\</span><span class="n">contrib</span><span class="p">\</span><span class="n">Deploy</span><span class="p">.</span><span class="n">ps1</span> <span class="n">-HostName</span> <span class="nv">$hostname</span> <span class="n">-UserName</span> <span class="n">fxrecorder</span> <span class="n">-MachineType</span> <span class="n">runner</span>
+</pre></div>
+</div>
+</li>
+</ol>
+<ol class="arabic" start="4">
+<li><p>Run the installation script</p>
+<p>The installation script is run on the remote host over SSH. Run the following
+to authenticate to the machine and run the script:</p>
+<div class="highlight-ps1 notranslate"><div class="highlight"><pre><span></span><span class="nb">Enter-PSSession</span> <span class="n">-UserName</span> <span class="n">fxrunner</span> <span class="nv">$hostname</span>
+<span class="p">.\</span><span class="n">PowerShell</span><span class="p">\</span><span class="n">Scripts</span><span class="p">\</span><span class="nb">Install-FxRunner</span><span class="p">.</span><span class="n">ps1</span>
+<span class="nb">Exit-PSSession</span>
+</pre></div>
+</div>
+</li>
+</ol>
+</div>
+</div>
+<div class="section" id="updating-existing-deployments">
+<h2>Updating Existing Deployments<a class="headerlink" href="#updating-existing-deployments" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="update-fxrecorder">
+<span id="id1"></span><h3>fxrecorder<a class="headerlink" href="#update-fxrecorder" title="Permalink to this headline">¶</a></h3>
+<p>To update an existing deployment of fxrecorder, run the following PowerShell code:</p>
+<div class="highlight-ps1 notranslate"><div class="highlight"><pre><span></span><span class="nv">$session</span> <span class="p">=</span> <span class="nb">New-PSSession</span> <span class="n">-UserName</span> <span class="n">fxrecorder</span> <span class="nv">$hostname</span>
+<span class="nb">Invoke-Command</span> <span class="n">-Session</span> <span class="nv">$session</span> <span class="n">-ScriptBlock</span> <span class="p">{</span> <span class="nb">Disable-FxRecorder</span><span class="p">.</span><span class="n">ps1</span> <span class="p">}</span>
+<span class="p">.\</span><span class="n">Contrib</span><span class="p">\</span><span class="n">Deploy</span> <span class="n">-HostName</span> <span class="nv">$hostname</span> <span class="n">-UserName</span> <span class="n">fxrecorder</span> <span class="n">-MachineType</span> <span class="n">recorder</span>
+<span class="nb">Invoke-Command</span> <span class="n">-Session</span> <span class="nv">$session</span> <span class="n">-ScriptBlock</span> <span class="p">{</span> <span class="nb">Enable-FxRecorder</span><span class="p">.</span><span class="n">ps1</span> <span class="p">}</span>
+<span class="nb">Remove-PSSession</span> <span class="nv">$session</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="update-fxrunner">
+<span id="id2"></span><h3>fxrunner<a class="headerlink" href="#update-fxrunner" title="Permalink to this headline">¶</a></h3>
+<p>To update an existing deployment of fxrunner, run the following PowerShell code:</p>
+<div class="highlight-ps1 notranslate"><div class="highlight"><pre><span></span><span class="nv">$session</span> <span class="p">=</span> <span class="nb">New-PSSession</span> <span class="n">-UserName</span> <span class="n">fxrunner</span> <span class="n">HOSTNAME</span>
+<span class="nb">Invoke-Command</span> <span class="n">-Session</span> <span class="nv">$session</span> <span class="n">-ScriptBlock</span> <span class="p">{</span> <span class="nb">Disable-FxRunner</span><span class="p">.</span><span class="n">ps1</span> <span class="p">}</span>
+<span class="p">.\</span><span class="n">contrib</span><span class="p">\</span><span class="n">Deploy</span> <span class="n">-HostName</span> <span class="n">HOSTNAME</span> <span class="n">-UserName</span> <span class="n">fxrunner</span> <span class="n">-MachineType</span> <span class="n">runner</span>
+<span class="nb">Invoke-Command</span> <span class="n">-Session</span> <span class="nv">$session</span> <span class="n">-ScriptBlock</span> <span class="p">{</span> <span class="nb">Enable-FxRunner</span><span class="p">.</span><span class="n">ps1</span> <span class="p">}</span>
+<span class="nb">Remove-PSSession</span> <span class="nv">$session</span>
+</pre></div>
+</div>
+</div>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+        <a href="configuration.html" class="btn btn-neutral float-left" title="Configuration" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>
