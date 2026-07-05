@@ -1,7 +1,7 @@
 [package]
 name = "fxrecorder"
 version = "0.1.0"
-authors = ["Barret Rennie <barret@mozilla.com>"]
+authors = ["Beth Rennie <beth@brennie.ca>"]
 edition = "2018"
 license = "MPL-2.0"
 

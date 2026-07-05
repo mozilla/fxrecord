@@ -20,7 +20,7 @@ import sphinx_rtd_theme
 
 project = "fxrecord"
 copyright = "2021, Mozilla"
-author = "Barret Rennie"
+author = "Beth Rennie"
 
 # The full version, including alpha/beta/rc tags
 release = "0.1.0"
